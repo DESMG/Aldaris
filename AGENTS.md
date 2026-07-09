@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-Aldaris 是一个 Issue Tracker.
+Aldaris 是一个 Issue Tracker System.
 
 实现应保持直接、可读、容易验证；
 
