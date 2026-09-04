@@ -1,178 +1,116 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
+import { hash, passwordHash, newPassword, passwordValid } from "./password";
 import { Buffer } from "node:buffer";
+import type { User } from "../shared/types";
+import { LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_MS, NAME_MAX_LENGTH, USERNAME_PATTERN } from "../shared/limits";
+import type { Env } from "./env";
+import { currentUser, issueToken } from "./jwt";
+import { HttpError, readForm } from "./input";
+import { adminUsers } from "./users";
+import { recordOperation } from "./operation-record";
 
-export type User = { id: number; name: string; username: string; role: "user" | "admin" };
-type Account = User & { passwordHash: string; passwordSalt: string };
+type Account = User & { passwordHash: string; passwordSalt: string; credentialVersion: number };
 
-function hash(value: string) {
-    return createHash("sha256").update(value).digest("hex");
-}
-
-function passwordHash(password: string, salt: string) {
-    return Buffer.from(scryptSync(password, salt, 64, { N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 }));
-}
-
-function sessionHash(request: Request) {
-    const cookie = request.headers.get("Cookie") ?? "";
-    const token = cookie.match(/(?:^|;\s*)aldaris_session=([a-f0-9]{64})(?:;|$)/)?.[1];
-    return token ? hash(token) : null;
-}
-
-function cookie(request: Request, token: string, maxAge: number) {
-    const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
-    return `aldaris_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
-}
-
-export async function currentUser(request: Request, db: D1Database) {
-    const tokenHash = sessionHash(request);
-    if (!tokenHash) return null;
-    return db.prepare("SELECT users.id, users.name, users.username, users.role FROM sessions JOIN users ON users.id = sessions.userId WHERE sessions.tokenHash = ? AND sessions.expiresAt > ? AND users.deletedAt IS NULL")
-        .bind(tokenHash, Date.now()).first<User>();
-}
-
-export async function auth(request: Request, db: D1Database) {
+export async function auth(request: Request, env: Env, user: User | null) {
     const path = new URL(request.url).pathname;
-    const headers = new Headers({ "Cache-Control": "no-store" });
     if (path === "/api/auth/me" && request.method === "GET") {
-        const existing = await db.prepare("SELECT id FROM users LIMIT 1").first();
-        return Response.json({ user: await currentUser(request, db), setupRequired: !existing }, { headers });
+        const existing = await env.DB.prepare("SELECT id FROM users LIMIT 1").first();
+        return Response.json({ user, setupRequired: !existing });
     }
-    if (path.startsWith("/api/admin/users")) {
-        const admin = await currentUser(request, db);
-        if (!admin) return Response.json({ error: "请先登录。" }, { status: 401, headers });
-        if (admin.role !== "admin") return Response.json({ error: "只有管理员可以管理用户。" }, { status: 403, headers });
-        if (path === "/api/admin/users" && request.method === "GET") {
-            const result = await db.prepare("SELECT id, name, username, role FROM users WHERE deletedAt IS NULL ORDER BY id").all<User>();
-            return Response.json({ users: result.results }, { headers });
-        }
-        const match = path.match(/^\/api\/admin\/users\/(\d+)$/);
-        if (match && ["PATCH", "DELETE"].includes(request.method)) {
-            const target = await db.prepare("SELECT id, name, username, role FROM users WHERE id = ? AND deletedAt IS NULL").bind(match[1]).first<User>();
-            if (!target) return Response.json({ error: "未找到该用户。" }, { status: 404, headers });
-            if (request.method === "DELETE") {
-                if (target.id === admin.id) return Response.json({ error: "不能删除当前登录账户。" }, { status: 403, headers });
-                await db.batch([
-                    db.prepare("DELETE FROM sessions WHERE userId = ?").bind(target.id),
-                    db.prepare("UPDATE issues SET assignmentVersion = assignmentVersion + 1 WHERE id IN (SELECT issueId FROM issue_assignees WHERE userId = ?)").bind(target.id),
-                    db.prepare("DELETE FROM issue_assignees WHERE userId = ?").bind(target.id),
-                    db.prepare("UPDATE users SET name = '已删除用户', username = ?, passwordHash = '', passwordSalt = '', deletedAt = ? WHERE id = ?")
-                        .bind(`deleted:${target.id}`, new Date().toISOString(), target.id),
-                ]);
-                return Response.json({ ok: true }, { headers });
-            }
-            const form = await request.formData();
-            const name = String(form.get("name") ?? "").trim();
-            const username = String(form.get("username") ?? "").trim().toLowerCase();
-            const password = String(form.get("password") ?? "");
-            if (!name || name.length > 50 || !/^[a-z0-9_.-]{1,50}$/.test(username) || (password && (password.length < 6 || password.length > 128))) return Response.json({ error: "请检查昵称、用户名和密码长度。" }, { status: 400, headers });
-            const duplicate = await db.prepare("SELECT id FROM users WHERE username = ? AND id != ?").bind(username, target.id).first();
-            if (duplicate) return Response.json({ error: "该用户名已存在。" }, { status: 409, headers });
-            const statements = [db.prepare("UPDATE users SET name = ?, username = ? WHERE id = ?").bind(name, username, target.id)];
-            if (password) {
-                const salt = Buffer.from(randomBytes(16)).toString("hex");
-                statements.push(db.prepare("UPDATE users SET passwordHash = ?, passwordSalt = ? WHERE id = ?").bind(passwordHash(password, salt).toString("hex"), salt, target.id));
-            }
-            if (password || username !== target.username) statements.push(db.prepare("DELETE FROM sessions WHERE userId = ?").bind(target.id));
-            await db.batch(statements);
-            return Response.json({ user: { ...target, name, username } }, { headers });
-        }
-    }
-    if (request.method !== "POST") return Response.json({ error: "未找到该登录操作。" }, { status: 404, headers });
-
-    if (path === "/api/auth/logout") {
-        await db.prepare("DELETE FROM sessions WHERE tokenHash = ?").bind(sessionHash(request)).run();
-        headers.set("Set-Cookie", cookie(request, "", 0));
-        return Response.json({ user: null }, { headers });
-    }
-    if (!["/api/admin/users", "/api/auth/login", "/api/auth/password", "/api/auth/setup"].includes(path)) {
-        return Response.json({ error: "未找到该登录操作。" }, { status: 404, headers });
-    }
-
-    const publicAction = path === "/api/auth/login" || path === "/api/auth/setup";
-    const user = publicAction ? null : await currentUser(request, db);
-    if (!publicAction && !user) return Response.json({ error: "请先登录。" }, { status: 401, headers });
-    if (path === "/api/admin/users" && user!.role !== "admin") return Response.json({ error: "只有管理员可以创建用户。" }, { status: 403, headers });
-    const form = await request.formData();
-    const username = path === "/api/auth/password" ? user!.username : String(form.get("username") ?? "").trim().toLowerCase();
-    const password = String(form.get("password") ?? "");
-    const now = Date.now();
-    const window = Math.floor(now / 900000);
-    const keys = [hash(`username:${username}:${window}`)];
-    const ip = request.headers.get("CF-Connecting-IP");
-    if (ip) keys.push(hash(`ip:${ip}:${window}`));
-    await db.prepare("DELETE FROM auth_attempts WHERE expiresAt <= ?").bind(now).run();
-    for (const key of keys) {
-        const attempt = await db.prepare("INSERT INTO auth_attempts (key, attempts, expiresAt) VALUES (?, 1, ?) ON CONFLICT(key) DO UPDATE SET attempts = attempts + 1 RETURNING attempts")
-            .bind(key, (window + 1) * 900000).first<{ attempts: number }>();
-        if (attempt!.attempts > (key === keys[0] ? 20 : 100)) {
-            headers.set("Retry-After", String(Math.ceil(((window + 1) * 900000 - now) / 1000)));
-            return Response.json({ error: "尝试次数过多，请稍后重试。" }, { status: 429, headers });
-        }
-    }
-
-    if (path === "/api/auth/password") {
-        const newPassword = String(form.get("newPassword") ?? "");
-        if (password.length > 128 || newPassword.length < 6 || newPassword.length > 128) {
-            return Response.json({ error: "新密码长度必须为 6–128 个字符。" }, { status: 400, headers });
-        }
-        const account = await db.prepare("SELECT passwordHash, passwordSalt FROM users WHERE id = ? AND deletedAt IS NULL").bind(user!.id).first<Account>();
-        if (!account) return Response.json({ error: "请重新登录。" }, { status: 401, headers });
-        if (!timingSafeEqual(passwordHash(password, account!.passwordSalt), Buffer.from(account!.passwordHash, "hex"))) {
-            return Response.json({ error: "当前密码不正确。" }, { status: 400, headers });
-        }
-        const salt = Buffer.from(randomBytes(16)).toString("hex");
-        const [changed] = await db.batch([
-            db.prepare("UPDATE users SET passwordHash = ?, passwordSalt = ? WHERE id = ? AND passwordHash = ? AND passwordSalt = ? AND deletedAt IS NULL")
-                .bind(passwordHash(newPassword, salt).toString("hex"), salt, user!.id, account.passwordHash, account.passwordSalt),
-            db.prepare("DELETE FROM sessions WHERE userId = ? AND changes() > 0").bind(user!.id),
-        ]);
-        if (!changed.meta.changes) return Response.json({ error: "账户已发生变化，请重新登录。" }, { status: 409, headers });
-        headers.set("Set-Cookie", cookie(request, "", 0));
-        return Response.json({ user: null }, { headers });
-    }
-
-    if (!/^[a-z0-9_.-]{1,50}$/.test(username) || password.length < 6 || password.length > 128) {
-        return Response.json({ error: "请输入有效用户名和 6–128 个字符的密码。" }, { status: 400, headers });
-    }
+    if (path === "/api/operations" || path.startsWith("/api/admin/")) return adminUsers(request, env, user);
+    if (request.method !== "POST") throw new HttpError(404, "未找到该登录操作。");
+    if (path === "/api/auth/logout") return Response.json({ user: null });
+    if (!["/api/auth/login", "/api/auth/password", "/api/auth/setup"].includes(path)) throw new HttpError(404, "未找到该登录操作。");
+    if (path === "/api/auth/password" && !user) throw new HttpError(401, "请先登录。");
 
     if (path === "/api/auth/setup") {
+        const existing = await env.DB.prepare("SELECT id FROM users LIMIT 1").first();
+        if (existing) throw new HttpError(409, "系统已初始化，请登录。");
+        const credential = await env.KV.get("setup");
+        if (!credential || credential.length < 32) throw new HttpError(503, "请先在 KV 配置至少 32 个字符的一次性初始化凭据。");
+        const form = await readForm(request, 8192);
+        const provided = String(form.get("setupCredential") ?? "");
+        if (!provided || !timingSafeEqual(Buffer.from(hash(provided)), Buffer.from(hash(credential)))) throw new HttpError(403, "初始化凭据不正确。");
         const name = String(form.get("name") ?? "").trim();
-        if (!name || name.length > 50) return Response.json({ error: "昵称长度必须为 1–50 个字符。" }, { status: 400, headers });
-        if (password !== form.get("confirmPassword")) return Response.json({ error: "两次输入的密码不一致。" }, { status: 400, headers });
-        const salt = Buffer.from(randomBytes(16)).toString("hex");
-        const created = await db.prepare("INSERT INTO users (name, username, passwordHash, passwordSalt, role, createdAt) SELECT ?, ?, ?, ?, 'admin', ? WHERE NOT EXISTS (SELECT 1 FROM users) RETURNING id")
-            .bind(name, username, passwordHash(password, salt).toString("hex"), salt, new Date().toISOString()).first();
-        if (!created) return Response.json({ error: "系统已初始化，请刷新页面后登录。" }, { status: 409, headers });
-        return Response.json({ user: null }, { status: 201, headers });
+        const username = String(form.get("username") ?? "").trim().toLowerCase();
+        const password = String(form.get("password") ?? "");
+        if (!name || name.length > NAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请检查昵称、用户名和密码长度。");
+        if (password !== form.get("confirmPassword")) throw new HttpError(400, "两次输入的密码不一致。");
+        const { salt, digest } = newPassword(password);
+        const createdAt = new Date().toISOString();
+        const create = env.DB.prepare(`
+            INSERT INTO users (name, username, passwordHash, passwordSalt, role, createdAt)
+            SELECT ?, ?, ?, ?, 'admin', ? WHERE NOT EXISTS (SELECT 1 FROM users)
+            RETURNING id
+        `).bind(name, username, digest, salt, createdAt);
+        const audit = env.DB.prepare(`
+            INSERT INTO operation_events (actorId, targetId, action, details, createdAt)
+            SELECT id, id, 'setup', json_object('username', username), ? FROM users WHERE changes() > 0
+        `).bind(createdAt);
+        const [created] = await env.DB.batch([create, audit]);
+        if (!created.meta.changes) throw new HttpError(409, "系统已初始化，请登录。");
+        return Response.json({ user: null }, { status: 201 });
     }
 
-    let account = await db.prepare("SELECT id, name, username, role, passwordHash, passwordSalt FROM users WHERE username = ? AND deletedAt IS NULL").bind(username).first<Account>();
-    if (path === "/api/admin/users") {
-        const name = String(form.get("name") ?? "").trim();
-        if (!name || name.length > 50) return Response.json({ error: "昵称长度必须为 1–50 个字符。" }, { status: 400, headers });
-        if (account) return Response.json({ error: "该用户名已存在。" }, { status: 409, headers });
-        const salt = Buffer.from(randomBytes(16)).toString("hex");
-        account = await db.prepare("INSERT INTO users (name, username, passwordHash, passwordSalt, createdAt) VALUES (?, ?, ?, ?, ?) ON CONFLICT(username) DO NOTHING RETURNING id, name, username, role, passwordHash, passwordSalt")
-            .bind(name, username, passwordHash(password, salt).toString("hex"), salt, new Date().toISOString()).first<Account>();
-        if (!account) return Response.json({ error: "该用户名已存在。" }, { status: 409, headers });
-        const { id, name: createdName, role } = account;
-        return Response.json({ user: { id, name: createdName, username, role } }, { status: 201, headers });
-    } else {
-        const digest = passwordHash(password, account?.passwordSalt ?? "00000000000000000000000000000000");
-        const expected = account ? Buffer.from(account.passwordHash, "hex") : Buffer.alloc(64);
-        const matches = timingSafeEqual(digest, expected);
-        if (!account || !matches) return Response.json({ error: "用户名或密码不正确。" }, { status: 401, headers });
+    const form = await readForm(request, 8192);
+    const username = path === "/api/auth/password" ? user!.username : String(form.get("username") ?? "").trim().toLowerCase();
+    const password = String(form.get("password") ?? "");
+    if (!USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请输入有效用户名和 6–128 个字符的密码。");
+    const now = Date.now();
+    const accountKey = hash(`username:${username}`);
+    const removeExpired = env.DB.prepare("DELETE FROM auth_account_attempts WHERE attemptedAt <= ?").bind(now - LOGIN_WINDOW_MS);
+    const reserveAttempt = env.DB.prepare(`
+        INSERT INTO auth_account_attempts (id, accountKey, attemptedAt)
+        SELECT ?, ?, ? WHERE (
+            SELECT COUNT(*) FROM auth_account_attempts WHERE accountKey = ? AND attemptedAt > ?
+        ) < ?
+    `).bind(crypto.randomUUID(), accountKey, now, accountKey, now - LOGIN_WINDOW_MS, LOGIN_ATTEMPT_LIMIT);
+    const earliestAttempt = env.DB.prepare(`
+        SELECT MIN(attemptedAt) AS firstAttempt FROM auth_account_attempts
+        WHERE accountKey = ? AND attemptedAt > ?
+    `).bind(accountKey, now - LOGIN_WINDOW_MS);
+    const [_removed, reserved, earliest] = await env.DB.batch([removeExpired, reserveAttempt, earliestAttempt]);
+    if (!reserved.meta.changes) {
+        const { firstAttempt } = earliest.results[0] as { firstAttempt: number };
+        throw new HttpError(429, "10 分钟内最多尝试 3 次，请稍后重试。", {
+            "Retry-After": String(Math.max(1, Math.ceil((firstAttempt + LOGIN_WINDOW_MS - now) / 1000))),
+        });
     }
+    const ip = request.headers.get("CF-Connecting-IP");
+    if (ip) {
+        const window = Math.floor(now / 900000);
+        const key = hash(`ip:${ip}:${window}`);
+        await env.DB.prepare("DELETE FROM auth_attempts WHERE expiresAt <= ?").bind(now).run();
+        const attempt = await env.DB.prepare(`
+            INSERT INTO auth_attempts (key, attempts, expiresAt) VALUES (?, 1, ?)
+            ON CONFLICT(key) DO UPDATE SET attempts = attempts + 1 RETURNING attempts
+        `).bind(key, (window + 1) * 900000).first<{ attempts: number }>();
+        if (attempt!.attempts > 100) throw new HttpError(429, "当前网络尝试次数过多，请稍后重试。", { "Retry-After": String(Math.ceil(((window + 1) * 900000 - now) / 1000)) });
+    }
+    const account = await env.DB.prepare(`
+        SELECT id, name, username, role, passwordHash, passwordSalt, credentialVersion
+        FROM users WHERE username = ? AND deletedAt IS NULL
+    `).bind(username).first<Account>();
+    const digest = passwordHash(password, account?.passwordSalt ?? "00000000000000000000000000000000");
+    const expected = account ? Buffer.from(account.passwordHash, "hex") : Buffer.alloc(64);
+    const matches = timingSafeEqual(digest, expected);
+    if (!account || !matches) throw new HttpError(path === "/api/auth/password" ? 400 : 401, path === "/api/auth/password" ? "当前密码不正确。" : "用户名或密码不正确。");
 
-    const token = Buffer.from(randomBytes(32)).toString("hex");
-    const maxAge = 7 * 24 * 60 * 60;
-    const [, created] = await db.batch([
-        db.prepare("DELETE FROM sessions WHERE expiresAt <= ? OR tokenHash = ?").bind(now, sessionHash(request)),
-        db.prepare("INSERT INTO sessions (tokenHash, userId, expiresAt) SELECT ?, id, ? FROM users WHERE id = ? AND username = ? AND passwordHash = ? AND passwordSalt = ? AND deletedAt IS NULL")
-            .bind(hash(token), now + maxAge * 1000, account.id, account.username, account.passwordHash, account.passwordSalt),
-    ]);
-    if (!created.meta.changes) return Response.json({ error: "账户已发生变化，请重新登录。" }, { status: 401, headers });
-    headers.set("Set-Cookie", cookie(request, token, maxAge));
-    const { id, name, role } = account;
-    return Response.json({ user: { id, name, username, role } }, { headers });
+    if (path === "/api/auth/password") {
+        const next = String(form.get("newPassword") ?? "");
+        if (!passwordValid(next)) throw new HttpError(400, "新密码长度必须为 6–128 个字符。");
+        const replacement = newPassword(next);
+        const update = env.DB.prepare(`
+            UPDATE users SET passwordHash = ?, passwordSalt = ?, credentialVersion = credentialVersion + 1
+            WHERE id = ? AND credentialVersion = ? AND deletedAt IS NULL
+        `).bind(replacement.digest, replacement.salt, account.id, account.credentialVersion);
+        const operation = recordOperation(env.DB, user!, "password_reset", { userId: account.id, self: true });
+        const [changed] = await env.DB.batch([update, operation]);
+        if (!changed.meta.changes) throw new HttpError(409, "账户已发生变化，请重新登录。");
+        return Response.json({ user: null });
+    }
+    const token = await issueToken(request, env, account);
+    const confirmed = await currentUser(new Request(request.url, { headers: { Authorization: `Bearer ${token.token}` } }), env);
+    if (!confirmed) throw new HttpError(401, "账户已发生变化，请重新登录。");
+    return Response.json({ ...token, user: confirmed });
 }

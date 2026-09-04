@@ -1,0 +1,16 @@
+export const IMAGE_MAX_BYTES = 1024 * 1024;
+export const IMAGE_MAX_COUNT = 10;
+export const IMAGE_MAX_DIMENSION = 8192;
+export const IMAGE_MAX_PIXELS = 16 * 1024 * 1024;
+export const FORM_BODY_MAX_BYTES = 256 * 1024;
+export const UPLOAD_BODY_MAX_BYTES = IMAGE_MAX_BYTES * IMAGE_MAX_COUNT + FORM_BODY_MAX_BYTES;
+export const TITLE_MAX_LENGTH = 200;
+export const DESCRIPTION_MAX_LENGTH = 20000;
+export const NAME_MAX_LENGTH = 50;
+export const PASSWORD_MIN_LENGTH = 6;
+export const PASSWORD_MAX_LENGTH = 128;
+export const USERNAME_PATTERN = /^[a-z0-9_.-]{1,50}$/;
+export const ASSIGNEE_MAX_COUNT = 5;
+export const LOGIN_ATTEMPT_LIMIT = 3;
+export const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+export const NOTIFICATION_BATCH_LIMIT = 20;
