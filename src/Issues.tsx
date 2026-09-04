@@ -1,42 +1,62 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { RefObject } from "react";
 import {
     Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
-    LinearProgress, MenuItem, Pagination, Paper, Stack, Tab, Tabs, TextField, Typography,
+    LinearProgress, Pagination, Paper, Stack, Tab, Tabs, TextField, Typography,
 } from "@mui/material";
 
-import { api, navigate } from "./api";
+import { api, cachedJson, getCachedJson, navigate } from "./api";
 import type { Issue, User } from "./api";
 import Description from "./Description";
+import { assignmentLabels, assignmentRoles } from "../shared/assignments";
 
-export default function Issues({ user }: { user: User | null }) {
-    const [issues, setIssues] = useState<Issue[]>([]);
-    const [search, setSearch] = useState("");
-    const [status, setStatus] = useState<"Open" | "Closed">("Open");
-    const [page, setPage] = useState(1);
-    const [counts, setCounts] = useState({ Open: 0, Closed: 0 });
-    const [loading, setLoading] = useState(true);
+export type IssuesView = { search: string; querySearch: string; status: "Open" | "Closed"; page: number };
+export const initialIssuesView: IssuesView = { search: "", querySearch: "", status: "Open", page: 1 };
+type IssuesData = { issues: Issue[]; counts: { Open: number; Closed: number } };
+
+export default function Issues({ user, savedView }: { user: User | null; savedView: RefObject<IssuesView> }) {
+    const [view, setView] = useState(() => savedView.current);
+    const { search, querySearch, status, page } = view;
+    const url = `/api/issues?${new URLSearchParams({ status, page: String(page), search: querySearch })}`;
+    const cached = getCachedJson<IssuesData>(url);
+    const [issues, setIssues] = useState<Issue[]>(() => cached?.issues ?? []);
+    const [counts, setCounts] = useState(() => cached?.counts ?? { Open: 0, Closed: 0 });
+    const [loading, setLoading] = useState(!cached);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [refresh, setRefresh] = useState(0);
+    const lastRefresh = useRef(refresh);
     const [creating, setCreating] = useState(false);
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [images, setImages] = useState<File[]>([]);
-    const [priority, setPriority] = useState("Medium");
     const pages = Math.max(1, Math.ceil(counts[status] / 10));
 
     useEffect(() => {
+        savedView.current = view;
+    }, [savedView, view]);
+
+    useEffect(() => {
+        if (search.trim() === querySearch) return;
+        const timer = window.setTimeout(() => {
+            setView(current => ({ ...current, querySearch: search.trim(), page: 1 }));
+        }, 300);
+        return () => window.clearTimeout(timer);
+    }, [search, querySearch, setView]);
+
+    useEffect(() => {
         const controller = new AbortController();
-        setLoading(true);
+        const force = lastRefresh.current !== refresh;
+        lastRefresh.current = refresh;
+        setLoading(force || !getCachedJson<IssuesData>(url));
         setError("");
-        const query = new URLSearchParams({ status, page: String(page), search });
-        api(`/api/issues?${query}`, { signal: controller.signal })
-            .then((response) => response.json())
-            .then((data: { issues: Issue[]; counts: { Open: number; Closed: number } }) => {
+        cachedJson<IssuesData>(url, { refresh: force })
+            .then(data => {
                 if (controller.signal.aborted) return;
                 setIssues(data.issues);
                 setCounts(data.counts);
-                setPage(Math.min(page, Math.max(1, Math.ceil(data.counts[status] / 10))));
+                const nextPage = Math.min(page, Math.max(1, Math.ceil(data.counts[status] / 10)));
+                if (nextPage !== page) setView(current => ({ ...current, page: nextPage }));
             })
             .catch((error) => {
                 if (!controller.signal.aborted) setError(`获取列表失败：${String(error)}`);
@@ -45,7 +65,7 @@ export default function Issues({ user }: { user: User | null }) {
                 if (!controller.signal.aborted) setLoading(false);
             });
         return () => controller.abort();
-    }, [status, page, search, refresh]);
+    }, [status, page, url, refresh, setView]);
 
     return (
         <Stack spacing={3}>
@@ -55,8 +75,7 @@ export default function Issues({ user }: { user: User | null }) {
                     label="搜索标题"
                     value={search}
                     onChange={(event) => {
-                        setSearch(event.target.value);
-                        setPage(1);
+                        setView(current => ({ ...current, search: event.target.value }));
                     }}
                     fullWidth
                     size="small"
@@ -66,15 +85,13 @@ export default function Issues({ user }: { user: User | null }) {
                     setTitle("");
                     setDescription("");
                     setImages([]);
-                    setPriority("Medium");
                     setError("");
                     setCreating(true);
                 }}>新建工单</Button>
             </Stack>
 
             <Tabs value={status} onChange={(_, value: "Open" | "Closed") => {
-                setStatus(value);
-                setPage(1);
+                setView(current => ({ ...current, status: value, page: 1 }));
             }} aria-label="工单状态" sx={{ mt: 2, borderBottom: "1px solid", borderColor: "divider" }}>
                 <Tab value="Open" label={`未关闭 (${counts.Open})`} />
                 <Tab value="Closed" label={`已关闭 (${counts.Closed})`} />
@@ -99,8 +116,8 @@ export default function Issues({ user }: { user: User | null }) {
             )}
 
             <Stack spacing={2}>
-                {!loading && !error && issues.map((issue) => (
-                    <Paper component="a" href={`/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", p: { xs: 2, sm: 2.5 }, borderLeft: "4px solid", borderLeftColor: issue.priority === "High" ? "error.main" : issue.priority === "Medium" ? "warning.main" : "info.main", transition: "border-color 300ms, box-shadow 300ms", "&:hover, &:focus-visible": { borderTopColor: "primary.main", borderRightColor: "primary.main", borderBottomColor: "primary.main", boxShadow: "0 6px 20px rgb(0 0 0 / 12%)" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
+                {issues.map((issue) => (
+                    <Paper component="a" href={`/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
                         <Stack spacing={2}>
                             <Typography
                                 title={`#${issue.id} ${issue.title}`}
@@ -109,15 +126,19 @@ export default function Issues({ user }: { user: User | null }) {
                                 <Box component="span" sx={{ color: "text.secondary", fontWeight: 400, mr: 1.5 }}>#{issue.id}</Box>{issue.title}
                             </Typography>
                             <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                                <Chip size="small" label={issue.status === "Open" ? "未关闭" : "已关闭"} color={issue.status === "Open" ? "success" : "default"} />
+                                <Chip size="small" label={issue.status === "Open" ? "未关闭" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
                                 <Chip size="small" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} variant="outlined" />
+                                <Chip size="small" label={`创建人：${issue.authorName ?? "匿名"}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
+                                {assignmentRoles.flatMap(role => issue.assignees.filter(member => member.role === role).map(member => (
+                                    <Chip key={`${role}-${member.id}`} size="small" label={`${assignmentLabels[role]}：${member.name}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
+                                )))}
                                 <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: "auto" }, width: { xs: "100%", sm: "auto" } }}>{new Date(issue.createdAt).toLocaleString("sv-SE")}</Typography>
                             </Stack>
                         </Stack>
                     </Paper>
                 ))}
             </Stack>
-            {counts[status] > 0 && <Pagination count={pages} page={page} disabled={loading} onChange={(_, value) => setPage(value)} />}
+            {counts[status] > 0 && <Pagination count={pages} page={page} disabled={loading} onChange={(_, value) => setView(current => ({ ...current, page: value }))} />}
 
             <Dialog open={creating && user !== null} onClose={() => { if (!saving) setCreating(false); }} fullWidth maxWidth="sm" aria-labelledby="create-issue-title">
                 <Box component="form" onSubmit={async (event) => {
@@ -128,7 +149,6 @@ export default function Issues({ user }: { user: User | null }) {
                     const body = new FormData();
                     body.set("title", title.trim());
                     body.set("description", description.trim());
-                    body.set("priority", priority);
                     for (const file of images) body.append("images", file);
                     try {
                         const response = await api("/api/issues", { method: "POST", body });
@@ -148,11 +168,7 @@ export default function Issues({ user }: { user: User | null }) {
                             {error && <Alert severity="error">{error}</Alert>}
                             <TextField label="标题" required autoFocus fullWidth disabled={saving} slotProps={{ htmlInput: { maxLength: 200 } }} value={title} onChange={(event) => setTitle(event.target.value)} />
                             <Description label="描述" value={description} onChange={setDescription} images={images} onImagesChange={setImages} disabled={saving} />
-                            <TextField select label="优先级" disabled={saving} value={priority} onChange={(event) => setPriority(event.target.value)}>
-                                <MenuItem value="Low">低</MenuItem>
-                                <MenuItem value="Medium">中</MenuItem>
-                                <MenuItem value="High">高</MenuItem>
-                            </TextField>
+                            <Stack direction="row"><Chip label="低优先级" color="info" variant="outlined" /></Stack>
                         </Stack>
                     </DialogContent>
                     <DialogActions>

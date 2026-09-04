@@ -4,7 +4,7 @@ import { api, navigate } from "./api";
 import type { User } from "./api";
 
 export default function AuthPage({ mode, user, onUserChange }: {
-    mode: "login" | "create-user" | "account";
+    mode: "login" | "setup" | "create-user" | "account";
     user: User | null;
     onUserChange: (user: User | null) => void;
 }) {
@@ -12,8 +12,8 @@ export default function AuthPage({ mode, user, onUserChange }: {
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState("");
     const next = new URLSearchParams(window.location.search).get("next") ?? "/";
-    const destination = ["/account", "/admin/users", "/admin/users/new"].includes(next) || /^\/issues\/\d+$/.test(next) ? next : "/";
-    const title = mode === "create-user" ? "创建用户" : mode === "account" ? "修改密码" : "登录";
+    const destination = ["/account", "/admin/users", "/admin/users/new", "/notifications"].includes(next) || /^\/issues\/\d+(?:\?reply=\d+)?$/.test(next) ? next : "/";
+    const title = mode === "setup" ? "创建管理员" : mode === "create-user" ? "创建用户" : mode === "account" ? "修改密码" : "登录";
 
     if (mode === "create-user" && user?.role !== "admin") {
         return <Alert severity="error">只有管理员可以创建用户。</Alert>;
@@ -29,7 +29,7 @@ export default function AuthPage({ mode, user, onUserChange }: {
         </Stack>;
     }
 
-    return <Paper variant="outlined" sx={{ p: { xs: 3, sm: 4 }, maxWidth: 440, mx: "auto", width: "100%", borderTop: "4px solid", borderTopColor: "primary.main", boxShadow: "0 16px 48px rgb(0 0 0 / 14%)" }}>
+    return <Paper variant="outlined" sx={{ p: { xs: 3, sm: 4 }, maxWidth: 440, mx: "auto", width: "100%", bgcolor: "var(--surface-muted)" }}>
         <Box component="form" onSubmit={async (event) => {
             event.preventDefault();
             if (saving) return;
@@ -53,7 +53,7 @@ export default function AuthPage({ mode, user, onUserChange }: {
                     return;
                 }
                 onUserChange(data.user);
-                navigate(mode === "account" ? "/login?passwordChanged=1" : destination);
+                navigate(mode === "setup" ? "/login?setupComplete=1" : mode === "account" ? "/login?passwordChanged=1" : destination);
             } catch (error) {
                 setError(String(error));
             } finally {
@@ -61,8 +61,10 @@ export default function AuthPage({ mode, user, onUserChange }: {
             }
         }}>
             <Stack spacing={2}>
-                {mode !== "login" && <Box><Button href={mode === "create-user" ? "/admin/users" : "/"} color="inherit" variant="outlined" disabled={saving}>← {mode === "create-user" ? "返回用户管理" : "返回列表"}</Button></Box>}
+                {mode !== "login" && mode !== "setup" && <Box><Button href={mode === "create-user" ? "/admin/users" : "/"} color="inherit" variant="outlined" disabled={saving}>← {mode === "create-user" ? "返回用户管理" : "返回列表"}</Button></Box>}
                 <Typography component="h1" variant="h5">{title}</Typography>
+                {mode === "setup" && <Typography color="text.secondary">首次使用，请创建管理员账户。</Typography>}
+                {mode === "login" && new URLSearchParams(window.location.search).has("setupComplete") && <Alert severity="success">管理员已创建，请登录。</Alert>}
                 {mode === "login" && new URLSearchParams(window.location.search).has("passwordChanged") && <Alert severity="success">密码已修改，请重新登录。</Alert>}
                 {error && <Alert severity="error">{error}</Alert>}
                 {success && <Alert severity="success">{success}</Alert>}
@@ -70,9 +72,9 @@ export default function AuthPage({ mode, user, onUserChange }: {
                     <Typography>{user!.name} · {user!.role === "admin" ? "管理员" : "用户"}</Typography>
                     <Typography color="text.secondary">{user!.username}</Typography>
                 </>}
-                {mode === "create-user" && <TextField name="name" label="昵称" autoComplete="off" required disabled={saving} slotProps={{ htmlInput: { maxLength: 50 } }} />}
+                {(mode === "create-user" || mode === "setup") && <TextField name="name" label="昵称" autoComplete="off" required disabled={saving} slotProps={{ htmlInput: { maxLength: 50 } }} />}
                 {mode !== "account" && <TextField name="username" label="用户名" autoComplete="username" required disabled={saving} slotProps={{ htmlInput: { maxLength: 50 } }} />}
-                <TextField name="password" label={mode === "account" ? "当前密码" : "密码"} type="password" autoComplete={mode === "create-user" ? "new-password" : "current-password"} required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} helperText={mode === "create-user" ? "6–128 个字符" : undefined} />
+                <TextField name="password" label={mode === "account" ? "当前密码" : "密码"} type="password" autoComplete={mode === "create-user" || mode === "setup" ? "new-password" : "current-password"} required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} helperText={mode === "create-user" || mode === "setup" ? "6–128 个字符" : undefined} />
                 {mode === "account" && <TextField name="newPassword" label="新密码" type="password" autoComplete="new-password" required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} helperText="6–128 个字符" />}
                 {mode !== "login" && <TextField name="confirmPassword" label="确认密码" type="password" autoComplete="new-password" required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} />}
                 <Button type="submit" variant="contained" disabled={saving}>{saving ? "处理中…" : mode === "account" ? "修改密码" : title}</Button>
