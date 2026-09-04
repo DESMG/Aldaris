@@ -8,6 +8,8 @@
     },
     "scripts": {
         "dev": "vite",
+        "migrate": "wrangler d1 migrations apply DB --local",
+        "migrate:remote": "wrangler d1 migrations apply DB --remote",
         "check": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
         "build": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json && vite build",
         "preview": "vite preview",
