@@ -34,7 +34,8 @@ export async function auth(request: Request, db: D1Database) {
     const path = new URL(request.url).pathname;
     const headers = new Headers({ "Cache-Control": "no-store" });
     if (path === "/api/auth/me" && request.method === "GET") {
-        return Response.json({ user: await currentUser(request, db) }, { headers });
+        const existing = await db.prepare("SELECT id FROM users LIMIT 1").first();
+        return Response.json({ user: await currentUser(request, db), setupRequired: !existing }, { headers });
     }
     if (path.startsWith("/api/admin/users")) {
         const admin = await currentUser(request, db);
@@ -52,6 +53,8 @@ export async function auth(request: Request, db: D1Database) {
                 if (target.id === admin.id) return Response.json({ error: "不能删除当前登录账户。" }, { status: 403, headers });
                 await db.batch([
                     db.prepare("DELETE FROM sessions WHERE userId = ?").bind(target.id),
+                    db.prepare("UPDATE issues SET assignmentVersion = assignmentVersion + 1 WHERE id IN (SELECT issueId FROM issue_assignees WHERE userId = ?)").bind(target.id),
+                    db.prepare("DELETE FROM issue_assignees WHERE userId = ?").bind(target.id),
                     db.prepare("UPDATE users SET name = '已删除用户', username = ?, passwordHash = '', passwordSalt = '', deletedAt = ? WHERE id = ?")
                         .bind(`deleted:${target.id}`, new Date().toISOString(), target.id),
                 ]);
@@ -81,12 +84,13 @@ export async function auth(request: Request, db: D1Database) {
         headers.set("Set-Cookie", cookie(request, "", 0));
         return Response.json({ user: null }, { headers });
     }
-    if (!["/api/admin/users", "/api/auth/login", "/api/auth/password"].includes(path)) {
+    if (!["/api/admin/users", "/api/auth/login", "/api/auth/password", "/api/auth/setup"].includes(path)) {
         return Response.json({ error: "未找到该登录操作。" }, { status: 404, headers });
     }
 
-    const user = path !== "/api/auth/login" ? await currentUser(request, db) : null;
-    if (path !== "/api/auth/login" && !user) return Response.json({ error: "请先登录。" }, { status: 401, headers });
+    const publicAction = path === "/api/auth/login" || path === "/api/auth/setup";
+    const user = publicAction ? null : await currentUser(request, db);
+    if (!publicAction && !user) return Response.json({ error: "请先登录。" }, { status: 401, headers });
     if (path === "/api/admin/users" && user!.role !== "admin") return Response.json({ error: "只有管理员可以创建用户。" }, { status: 403, headers });
     const form = await request.formData();
     const username = path === "/api/auth/password" ? user!.username : String(form.get("username") ?? "").trim().toLowerCase();
@@ -129,6 +133,17 @@ export async function auth(request: Request, db: D1Database) {
 
     if (!/^[a-z0-9_.-]{1,50}$/.test(username) || password.length < 6 || password.length > 128) {
         return Response.json({ error: "请输入有效用户名和 6–128 个字符的密码。" }, { status: 400, headers });
+    }
+
+    if (path === "/api/auth/setup") {
+        const name = String(form.get("name") ?? "").trim();
+        if (!name || name.length > 50) return Response.json({ error: "昵称长度必须为 1–50 个字符。" }, { status: 400, headers });
+        if (password !== form.get("confirmPassword")) return Response.json({ error: "两次输入的密码不一致。" }, { status: 400, headers });
+        const salt = Buffer.from(randomBytes(16)).toString("hex");
+        const created = await db.prepare("INSERT INTO users (name, username, passwordHash, passwordSalt, role, createdAt) SELECT ?, ?, ?, ?, 'admin', ? WHERE NOT EXISTS (SELECT 1 FROM users) RETURNING id")
+            .bind(name, username, passwordHash(password, salt).toString("hex"), salt, new Date().toISOString()).first();
+        if (!created) return Response.json({ error: "系统已初始化，请刷新页面后登录。" }, { status: 409, headers });
+        return Response.json({ user: null }, { status: 201, headers });
     }
 
     let account = await db.prepare("SELECT id, name, username, role, passwordHash, passwordSalt FROM users WHERE username = ? AND deletedAt IS NULL").bind(username).first<Account>();
