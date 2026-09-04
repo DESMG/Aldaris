@@ -1,40 +1,52 @@
 import { useEffect, useRef, useState } from "react";
-import type { RefObject } from "react";
 import {
-    Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+    Alert, Box, Button, Chip,
     LinearProgress, Pagination, Paper, Stack, Tab, Tabs, TextField, Typography,
 } from "@mui/material";
 
-import { api, cachedJson, getCachedJson, navigate } from "./api";
-import type { Issue, User } from "./api";
-import Description from "./Description";
+import { cachedJson, getCachedJson, navigate } from "./api";
+import type { IssueSummary, User } from "./api";
+import CreateIssueDialog from "./CreateIssueDialog";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
 
-export type IssuesView = { search: string; querySearch: string; status: "Open" | "Closed"; page: number };
-export const initialIssuesView: IssuesView = { search: "", querySearch: "", status: "Open", page: 1 };
-type IssuesData = { issues: Issue[]; counts: { Open: number; Closed: number } };
+type IssuesView = { search: string; querySearch: string; status: "Open" | "Closed"; page: number };
+function readView(): IssuesView {
+    const params = new URLSearchParams(window.location.search);
+    const search = params.get("search") ?? "";
+    const page = Number(params.get("page") ?? "1");
+    return { search, querySearch: search.trim(), status: params.get("status") === "Closed" ? "Closed" : "Open", page: Number.isSafeInteger(page) && page > 0 ? page : 1 };
+}
+type IssuesData = { issues: IssueSummary[]; counts: { Open: number; Closed: number } };
 
-export default function Issues({ user, savedView }: { user: User | null; savedView: RefObject<IssuesView> }) {
-    const [view, setView] = useState(() => savedView.current);
+export default function Issues({ user, locationSearch }: { user: User | null; locationSearch: string }) {
+    const [view, setView] = useState(readView);
     const { search, querySearch, status, page } = view;
     const url = `/api/issues?${new URLSearchParams({ status, page: String(page), search: querySearch })}`;
     const cached = getCachedJson<IssuesData>(url);
-    const [issues, setIssues] = useState<Issue[]>(() => cached?.issues ?? []);
+    const [issues, setIssues] = useState<IssueSummary[]>(() => cached?.issues ?? []);
     const [counts, setCounts] = useState(() => cached?.counts ?? { Open: 0, Closed: 0 });
     const [loading, setLoading] = useState(!cached);
-    const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [refresh, setRefresh] = useState(0);
     const lastRefresh = useRef(refresh);
     const [creating, setCreating] = useState(false);
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
-    const [images, setImages] = useState<File[]>([]);
     const pages = Math.max(1, Math.ceil(counts[status] / 10));
 
     useEffect(() => {
-        savedView.current = view;
-    }, [savedView, view]);
+        const params = new URLSearchParams();
+        if (status !== "Open") params.set("status", status);
+        if (querySearch) params.set("search", querySearch);
+        if (page > 1) params.set("page", String(page));
+        const query = params.toString();
+        const next = "/" + (query ? `?${query}` : "");
+        if (window.location.pathname === "/" && next !== window.location.pathname + window.location.search) {
+            if (!navigate(next)) setView(readView());
+        }
+    }, [status, querySearch, page]);
+
+    useEffect(() => {
+        setView(readView());
+    }, [locationSearch]);
 
     useEffect(() => {
         if (search.trim() === querySearch) return;
@@ -82,9 +94,6 @@ export default function Issues({ user, savedView }: { user: User | null; savedVi
                 />
                 <Button variant="contained" sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none" }} onClick={() => {
                     if (!user) { navigate("/login"); return; }
-                    setTitle("");
-                    setDescription("");
-                    setImages([]);
                     setError("");
                     setCreating(true);
                 }}>新建工单</Button>
@@ -140,43 +149,7 @@ export default function Issues({ user, savedView }: { user: User | null; savedVi
             </Stack>
             {counts[status] > 0 && <Pagination count={pages} page={page} disabled={loading} onChange={(_, value) => setView(current => ({ ...current, page: value }))} />}
 
-            <Dialog open={creating && user !== null} onClose={() => { if (!saving) setCreating(false); }} fullWidth maxWidth="sm" aria-labelledby="create-issue-title">
-                <Box component="form" onSubmit={async (event) => {
-                    event.preventDefault();
-                    if (!title.trim() || saving) return;
-                    setSaving(true);
-                    setError("");
-                    const body = new FormData();
-                    body.set("title", title.trim());
-                    body.set("description", description.trim());
-                    for (const file of images) body.append("images", file);
-                    try {
-                        const response = await api("/api/issues", { method: "POST", body });
-                        const data: { id: number } = await response.json();
-                        setCreating(false);
-                        setImages([]);
-                        navigate(`/issues/${data.id}`);
-                    } catch (error) {
-                        setError(`创建失败：${String(error)}`);
-                    } finally {
-                        setSaving(false);
-                    }
-                }}>
-                    <DialogTitle id="create-issue-title">新建工单</DialogTitle>
-                    <DialogContent>
-                        <Stack spacing={2} sx={{ pt: 1 }}>
-                            {error && <Alert severity="error">{error}</Alert>}
-                            <TextField label="标题" required autoFocus fullWidth disabled={saving} slotProps={{ htmlInput: { maxLength: 200 } }} value={title} onChange={(event) => setTitle(event.target.value)} />
-                            <Description label="描述" value={description} onChange={setDescription} images={images} onImagesChange={setImages} disabled={saving} />
-                            <Stack direction="row"><Chip label="低优先级" color="info" variant="outlined" /></Stack>
-                        </Stack>
-                    </DialogContent>
-                    <DialogActions>
-                        <Button disabled={saving} onClick={() => setCreating(false)}>取消</Button>
-                        <Button type="submit" variant="contained" disabled={!title.trim() || saving}>{saving ? "保存中…" : "创建"}</Button>
-                    </DialogActions>
-                </Box>
-            </Dialog>
+            {creating && user && <CreateIssueDialog onClose={() => setCreating(false)} />}
 
         </Stack>
     );

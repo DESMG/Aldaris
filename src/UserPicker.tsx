@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import { Autocomplete, TextField } from "@mui/material";
 import { cachedJson, getCachedJson } from "./api";
 import type { Member } from "./api";
+import { ASSIGNEE_MAX_COUNT } from "../shared/limits";
 
-export default function UserPicker({ label, value, onChange, disabled }: {
+export default function UserPicker({ label, value, onChange, disabled, accountRole, selectedIds }: {
     label: string;
     value: Member[];
     onChange: (value: Member[]) => void;
     disabled: boolean;
+    accountRole: "admin" | "user";
+    selectedIds: number[];
 }) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -23,7 +26,7 @@ export default function UserPicker({ label, value, onChange, disabled }: {
             setLoading(false);
             return;
         }
-        const url = `/api/users?search=${encodeURIComponent(query)}`;
+        const url = `/api/users?search=${encodeURIComponent(query)}&role=${accountRole}`;
         const cached = getCachedJson<{ users: Member[] }>(url);
         if (cached !== undefined) {
             setUsers(cached.users);
@@ -39,13 +42,14 @@ export default function UserPicker({ label, value, onChange, disabled }: {
                 .finally(() => { if (active) setLoading(false); });
         }, 200);
         return () => { active = false; window.clearTimeout(timer); };
-    }, [open, disabled, query, canSearch]);
+    }, [open, disabled, query, canSearch, accountRole]);
     return <Autocomplete multiple filterSelectedOptions value={value} options={users} disabled={disabled} loading={loading}
         inputValue={search}
         onOpen={() => setOpen(true)} onClose={() => { setOpen(false); setSearch(""); }}
         onInputChange={(_, input) => setSearch(input)}
         onChange={(_, next) => onChange(next)} filterOptions={options => options}
         getOptionLabel={option => `@${option.username}`}
+        getOptionDisabled={option => selectedIds.length >= ASSIGNEE_MAX_COUNT && !selectedIds.includes(option.id)}
         isOptionEqualToValue={(option, selected) => option.id === selected.id}
         noOptionsText={error || (canSearch ? "没有匹配的用户" : "请输入用户名搜索")} loadingText="正在读取用户…"
         slotProps={{
@@ -56,5 +60,5 @@ export default function UserPicker({ label, value, onChange, disabled }: {
             },
             listbox: { sx: { maxHeight: 220 } },
         }}
-        renderInput={params => <TextField {...params} label={label} error={!!error} helperText={error || "输入用户名搜索，最多显示 5 人；可选择多人，也可留空"} />} />;
+        renderInput={params => <TextField {...params} label={label} error={!!error} helperText={error || `搜索${accountRole === "admin" ? "管理员" : "普通用户"}；整个工单最多 ${ASSIGNEE_MAX_COUNT} 人，可兼任同类角色`} />} />;
 }

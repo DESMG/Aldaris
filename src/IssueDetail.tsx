@@ -1,247 +1,69 @@
-import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
-import { Alert, Avatar, Box, Button, ButtonGroup, Card, CardContent, CardHeader, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Menu, LinearProgress, MenuItem, Modal, Pagination, Paper, Stack, TextField, Typography } from "@mui/material";
-import { api, cachedJson, getCachedJson } from "./api";
-import type { Assignee, Issue, Reply, TimelineEntry, User } from "./api";
-import Description from "./Description";
-import CachedImage from "./CachedImage";
-import UserPicker from "./UserPicker";
-import { mentionMatches } from "../shared/mentions";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Alert, Avatar, Box, Button, ButtonGroup, Card, CardContent, CardHeader, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Menu, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { api, ApiError, assertApiSession, cachedJson, getApiSessionGeneration, getCachedJson } from "./api";
+import type { Issue, Reply, User } from "./api";
+import Content from "./IssueContent";
+import { EditReplyForm, ReplyForm } from "./ReplyForms";
+import AssigneeEditor from "./AssigneeEditor";
+import useIssueTimeline from "./useIssueTimeline";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
 
-function Content({ description, images }: { description: string; images: string[] }) {
-    const [expandedImage, setExpandedImage] = useState<string | null>(null);
-    const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
-    const preview = useRef<HTMLDivElement>(null);
-    const pointers = useRef(new Map<number, { x: number; y: number }>());
-    const dragged = useRef(false);
-    useEffect(() => {
-        if (expandedImage === null) return;
-        const wheel = (event: WheelEvent) => {
-            if (!preview.current || !event.composedPath().includes(preview.current)) return;
-            event.preventDefault();
-            const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16
-                : event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? window.innerHeight : 1;
-            setView(current => {
-                const scale = Math.min(8, Math.max(1, current.scale * Math.exp(-event.deltaY * unit * 0.01)));
-                return { scale, x: current.x * scale / current.scale, y: current.y * scale / current.scale };
-            });
-        };
-        document.addEventListener("wheel", wheel, { passive: false, capture: true });
-        return () => document.removeEventListener("wheel", wheel, true);
-    }, [expandedImage]);
-    let offset = 0;
-    const text = mentionMatches(description).flatMap(match => {
-        const before = description.slice(offset, match.index);
-        offset = match.index + match[0].length;
-        return [before, <Box key={match.index} component="span" sx={{ color: "primary.main", fontWeight: 700 }}>{match[0]}</Box>];
-    });
-    return <Stack spacing={2}>
-        {description && <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{text}{description.slice(offset)}</Typography>}
-        {images.map((key, index) => <Box component="button" type="button" key={key}
-            aria-label={`放大图片 ${index + 1}`}
-            aria-expanded={expandedImage === key}
-            onClick={event => {
-                event.currentTarget.focus({ preventScroll: true });
-                setView({ scale: 1, x: 0, y: 0 });
-                pointers.current.clear();
-                dragged.current = false;
-                setExpandedImage(key);
-            }}
-            sx={{
-                display: "flex", alignItems: "center", justifyContent: "center", border: 0,
-                p: 0, background: "transparent", cursor: "zoom-in", alignSelf: "flex-start", maxWidth: "100%", touchAction: "manipulation",
-                "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
-            }}>
-            <CachedImage src={`/api/images/${key}?private=1`} alt={`图片 ${index + 1}`} sx={{
-                display: "block", maxWidth: "100%", maxHeight: 480, objectFit: "contain",
-            }} />
-        </Box>)}
-        <Modal open={expandedImage !== null} onClose={() => setExpandedImage(null)}
-            slotProps={{ backdrop: { sx: { backgroundColor: "var(--overlay-backdrop)" } } }}>
-            <Box ref={preview} role="dialog" aria-modal="true" aria-label="图片放大预览"
-                sx={{ position: "absolute", inset: 0, overflow: "hidden", touchAction: "none" }}>
-                <Box onClick={() => { if (!dragged.current) setExpandedImage(null); }}
-                    onPointerDown={event => {
-                        if (event.button !== 0) return;
-                        if (pointers.current.size === 0) dragged.current = false;
-                        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-                        if (pointers.current.size > 1) dragged.current = true;
-                        event.currentTarget.setPointerCapture(event.pointerId);
-                    }}
-                    onPointerMove={event => {
-                        const previous = pointers.current.get(event.pointerId);
-                        if (!previous) return;
-                        const next = { x: event.clientX, y: event.clientY };
-                        const other = [...pointers.current.entries()].find(([id]) => id !== event.pointerId)?.[1];
-                        pointers.current.set(event.pointerId, next);
-                        const dx = next.x - previous.x;
-                        const dy = next.y - previous.y;
-                        if (dx === 0 && dy === 0) return;
-                        dragged.current = true;
-                        if (other) {
-                            const before = Math.hypot(previous.x - other.x, previous.y - other.y);
-                            const after = Math.hypot(next.x - other.x, next.y - other.y);
-                            if (before === 0) return;
-                            setView(current => {
-                                const scale = Math.min(8, Math.max(1, current.scale * after / before));
-                                return { scale, x: current.x * scale / current.scale + dx / 2,
-                                    y: current.y * scale / current.scale + dy / 2 };
-                            });
-                        } else {
-                            setView(current => ({ ...current, x: current.x + dx, y: current.y + dy }));
-                        }
-                    }}
-                    onPointerUp={event => { pointers.current.delete(event.pointerId); }}
-                    onPointerCancel={event => { dragged.current = true; pointers.current.delete(event.pointerId); }}
-                    onLostPointerCapture={event => { pointers.current.delete(event.pointerId); }}
-                    sx={{
-                    display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%",
-                    p: 2, boxSizing: "border-box", cursor: "grab", userSelect: "none", "&:active": { cursor: "grabbing" },
-                }}>
-                    {expandedImage !== null && <CachedImage src={`/api/images/${expandedImage}?private=1`}
-                        alt={`图片 ${images.indexOf(expandedImage) + 1}`} sx={{
-                            display: "block", minWidth: 0, maxWidth: "100%", maxHeight: "100%", objectFit: "contain",
-                            transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-                        }} />}
-                </Box>
-                <Stack direction="row" spacing={1} sx={{ position: "absolute", top: 16, right: 16 }}>
-                    <Button onClick={() => setView({ scale: 1, x: 0, y: 0 })}>重置缩放</Button>
-                    <Button onClick={() => setExpandedImage(null)}>关闭预览</Button>
-                </Stack>
-            </Box>
-        </Modal>
-    </Stack>;
-}
-
-function ReplyForm({ saving, blocked, editing, onReply, onStatus, children }: {
-    saving: boolean;
-    blocked: boolean;
-    editing: boolean;
-    onReply: (description: string, images: File[]) => Promise<boolean>;
-    onStatus: (status: "Open" | "Closed", reason: "completed" | "not_planned", replied: boolean) => Promise<void>;
-    children: (hasContent: boolean, submit: (status: "Open" | "Closed", reason: "completed" | "not_planned") => Promise<void>, disabled: boolean) => ReactNode;
-}) {
-    const [description, setDescription] = useState("");
-    const [images, setImages] = useState<File[]>([]);
-    const submitting = useRef(false);
-    const hasContent = !!description.trim() || images.length > 0;
-    const disabled = saving || blocked || editing;
-    async function submit(status?: "Open" | "Closed", reason: "completed" | "not_planned" = "completed") {
-        if (disabled || submitting.current || (!status && !hasContent)) return;
-        submitting.current = true;
-        try {
-            if (hasContent) {
-                if (!await onReply(description.trim(), images)) return;
-                setDescription("");
-                setImages([]);
-            }
-            if (status) await onStatus(status, reason, hasContent);
-        } finally {
-            submitting.current = false;
-        }
-    }
-    return <Box component="form" sx={{ p: { xs: 2, sm: 3 }, bgcolor: "background.paper", border: "1px solid", borderColor: "divider", borderRadius: 1 }} onSubmit={event => {
-        event.preventDefault();
-        void submit();
-    }}>
-        <Stack spacing={2}>
-            <Typography component="h2" variant="h6">参与讨论</Typography>
-            <Description label="回复内容" value={description} onChange={setDescription} images={images} onImagesChange={setImages} disabled={saving} />
-            {editing && <Typography variant="body2" color="text.secondary">请先保存或取消评论编辑，再发表新回复。</Typography>}
-            <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 1 }}>
-                {children(hasContent, submit, disabled)}
-                <Button type="submit" variant="contained" disabled={disabled || !hasContent}>{saving ? "保存中…" : "发表回复"}</Button>
-            </Box>
-        </Stack>
-    </Box>;
-}
-
-function EditReplyForm({ reply, saving, onSave, onCancel }: {
-    reply: Reply;
-    saving: boolean;
-    onSave: (description: string, retainedImages: string[], images: File[], version: number) => Promise<void>;
-    onCancel: () => void;
-}) {
-    const [description, setDescription] = useState(reply.description);
-    const [retainedImages, setRetainedImages] = useState(reply.images);
-    const [images, setImages] = useState<File[]>([]);
-    const [version] = useState(reply.version);
-    const submitting = useRef(false);
-    const disabled = saving || (!description.trim() && !retainedImages.length && !images.length);
-    return <Box component="form" onSubmit={async event => {
-        event.preventDefault();
-        if (disabled || submitting.current) return;
-        submitting.current = true;
-        try {
-            await onSave(description, retainedImages, images, version);
-        } finally {
-            submitting.current = false;
-        }
-    }}>
-        <Stack spacing={2}>
-            <Description label="评论内容" value={description} onChange={setDescription} images={images} onImagesChange={setImages} disabled={saving} />
-            {retainedImages.map((key, index) => <Stack key={key} spacing={1}>
-                <Content description="" images={[key]} />
-                <Box><Button disabled={saving} onClick={() => setRetainedImages(keys => keys.filter(image => image !== key))}>移除图片 {index + 1}</Button></Box>
-            </Stack>)}
-            <Stack direction="row" spacing={1}>
-                <Button type="submit" variant="contained" disabled={disabled}>保存</Button>
-                <Button color="inherit" disabled={saving} onClick={onCancel}>取消</Button>
-            </Stack>
-        </Stack>
-    </Box>;
-}
-
 export default function IssueDetail({ id, user, replyTarget }: { id: number; user: User | null; replyTarget: string | null }) {
+    const apiSession = getApiSessionGeneration();
     const cachedIssue = getCachedJson<{ issue: Issue }>(`/api/issues/${id}`);
-    const cachedTimeline = getCachedJson<{ entries: TimelineEntry[]; total: number; page: number }>(`/api/issues/${id}/timeline?page=1${replyTarget ? `&target=${encodeURIComponent(replyTarget)}` : ""}`);
-    const targetResolved = useRef(false);
-    const targetScrolled = useRef(false);
-    const resolvedPage = useRef<{ id: number; page: number; refresh: number; replyTarget: string | null } | null>(null);
     const [issue, setIssue] = useState<Issue | null>(() => cachedIssue?.issue ?? null);
-    const [replies, setReplies] = useState<TimelineEntry[]>(() => cachedTimeline?.entries ?? []);
-    const [total, setTotal] = useState(() => cachedTimeline?.total ?? 0);
-    const [page, setPage] = useState(1);
+    const [target, setTarget] = useState(replyTarget);
     const [refresh, setRefresh] = useState(0);
-    const [loading, setLoading] = useState(!cachedTimeline);
+    const { entries: replies, loading, error: loadError, hiddenCount, expanding, expand, targetUnavailable, hasSeparateTarget, total } = useIssueTimeline(id, target, refresh);
     const [detailLoading, setDetailLoading] = useState(!cachedIssue);
     const [detailError, setDetailError] = useState("");
     const [detailRefresh, setDetailRefresh] = useState(0);
-    const lastRefresh = useRef(refresh);
     const lastDetailRefresh = useRef(detailRefresh);
     const [saving, setSaving] = useState(false);
     const updating = useRef(false);
-    const [loadError, setLoadError] = useState("");
+    const mounted = useRef(false);
+    useEffect(() => {
+        mounted.current = true;
+        return () => { mounted.current = false; };
+    }, []);
     const [error, setError] = useState("");
+    const [issueConflict, setIssueConflict] = useState<{ field: "status" | "priority"; value: string; stateReason: "completed" | "not_planned" } | null>(null);
     const [editing, setEditing] = useState<number | null>(null);
     const [deleting, setDeleting] = useState<{ id: number; version: number } | null>(null);
+    const [deleteConflict, setDeleteConflict] = useState(false);
+    const [deletePreview, setDeletePreview] = useState<Reply | null>(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
     const [editingPriority, setEditingPriority] = useState(false);
     const [editingAssignee, setEditingAssignee] = useState(false);
-    const [assignees, setAssignees] = useState<Assignee[]>([]);
-    const [assignmentVersion, setAssignmentVersion] = useState(1);
     const [closeMenu, setCloseMenu] = useState<HTMLElement | null>(null);
     const [closeReason, setCloseReason] = useState<"completed" | "not_planned">(() => cachedIssue?.issue.stateReason ?? "completed");
     const canEdit = user !== null && issue !== null && (user.id === issue.authorId || user.role === "admin");
 
     async function updateIssue(field: "status" | "priority", value: string, stateReason = closeReason) {
-        if (updating.current) return false;
+        if (!mounted.current || window.location.pathname !== `/issues/${id}` || updating.current || !issue) return false;
         updating.current = true;
         setSaving(true);
         setError("");
+        setIssueConflict(null);
         const body = new FormData();
         body.set(field, value);
         if (field === "status" && value === "Closed") body.set("stateReason", stateReason);
         try {
-            const response = await api(`/api/issues/${id}/${field}`, { method: "POST", body });
-            const changed: Pick<Issue, "status" | "stateReason"> | Pick<Issue, "priority"> = await response.json();
+            const response = await api(`/api/issues/${id}/${field}`, { method: "POST", headers: { "If-Match": `"${issue.version}"` }, body, expectedSession: apiSession });
+            const changed: Pick<Issue, "status" | "stateReason" | "version"> | Pick<Issue, "priority" | "version"> = await response.json();
+            assertApiSession(apiSession);
             setIssue((current) => current ? { ...current, ...changed } : current);
             if (field === "status") setCloseReason(value === "Open" ? "completed" : stateReason);
             setRefresh(value => value + 1);
             if (field === "priority") setEditingPriority(false);
             return true;
         } catch (error) {
-            setError(`更新失败：${String(error)}`);
+            if (error instanceof ApiError && error.status === 409) {
+                setIssueConflict({ field, value, stateReason });
+                setDetailLoading(true);
+                setDetailRefresh(value => value + 1);
+                setError("工单已被更新，正在重新载入最新属性。你要提交的操作已保留，请核对后重试。");
+            } else setError(`更新失败：${String(error)}`);
             return false;
         } finally {
             setSaving(false);
@@ -270,57 +92,31 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
     }, [id, detailRefresh]);
 
     useEffect(() => {
-        targetResolved.current = false;
-        targetScrolled.current = false;
-        resolvedPage.current = null;
-    }, [id, replyTarget]);
+        setTarget(replyTarget);
+        setEditing(null);
+    }, [replyTarget]);
 
     useEffect(() => {
-        const resolved = resolvedPage.current;
-        if (resolved && resolved.id === id && resolved.page === page && resolved.refresh === refresh && resolved.replyTarget === replyTarget) return;
-        resolvedPage.current = null;
-        const controller = new AbortController();
-        const force = lastRefresh.current !== refresh;
-        lastRefresh.current = refresh;
-        setLoadError("");
-        const targetQuery = replyTarget && !targetResolved.current ? `&target=${encodeURIComponent(replyTarget)}` : "";
-        const url = `/api/issues/${id}/timeline?page=${page}${targetQuery}`;
-        setLoading(force || !getCachedJson(url));
-        cachedJson<{ entries: TimelineEntry[]; total: number; page: number }>(url, { refresh: force })
-        .then((comments: { entries: TimelineEntry[]; total: number; page: number }) => {
-            if (controller.signal.aborted) return;
-            targetResolved.current = true;
-            const lastPage = Math.max(1, Math.ceil(comments.total / 20));
-            if (comments.page > lastPage) {
-                setPage(lastPage);
-                setRefresh(value => value + 1);
-                return;
-            }
-            resolvedPage.current = { id, page: comments.page, refresh, replyTarget };
-            setLoading(false);
-            setPage(comments.page);
-            setReplies(comments.entries);
-            setTotal(comments.total);
-        }).catch((error) => {
-            if (!controller.signal.aborted) setLoadError(`读取时间线失败：${String(error)}`);
-        }).finally(() => {
-            if (!controller.signal.aborted) setLoading(false);
-        });
-        return () => controller.abort();
-    }, [id, page, refresh, replyTarget]);
+        if (!target || loading || !issue) return;
+        document.getElementById(`reply-${target}`)?.scrollIntoView({ block: "center" });
+    }, [target, loading, issue?.id]);
 
     useEffect(() => {
-        if (!replyTarget || !targetResolved.current || loading || !issue || targetScrolled.current) return;
-        const target = document.getElementById(`reply-${replyTarget}`);
-        if (target) { target.scrollIntoView({ block: "center" }); targetScrolled.current = true; }
-    }, [replyTarget, loading, issue, replies]);
-
+        if (!issue) return;
+        const previous = document.title;
+        document.title = issue.title;
+        return () => { document.title = previous; };
+    }, [issue?.title]);
     return <Stack spacing={3}>
         <Box><Button color="inherit" variant="outlined" href="/">← 返回列表</Button></Box>
         {(loading || detailLoading) && <LinearProgress aria-label="正在加载详情" />}
         {detailError && <Alert severity="error" action={<Button color="inherit" onClick={() => setDetailRefresh(value => value + 1)}>重试</Button>}>{detailError}</Alert>}
-        {loadError && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{loadError}</Alert>}
+        {loadError && <Alert severity="error" action={<Button color="inherit" disabled={editing !== null} onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{loadError}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
+        {issueConflict && <Alert severity="warning" action={<Button color="inherit" disabled={saving || editing !== null || detailLoading || !!detailError} onClick={() => void updateIssue(issueConflict.field, issueConflict.value, issueConflict.stateReason)}>按最新版本重试</Button>}>
+            保留的操作：{issueConflict.field === "priority" ? `优先级改为 ${{ Low: "低", Medium: "中", High: "高" }[issueConflict.value as Issue["priority"]]}` : issueConflict.value === "Open" ? "重新打开工单" : issueConflict.stateReason === "completed" ? "关闭为已完成" : "关闭为不计划处理"}。请比较当前工单属性后提交。
+        </Alert>}
+        {targetUnavailable && <Alert severity="warning">定位的评论已删除或不可用。</Alert>}
         {issue &&
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) 280px" }, gap: 3, alignItems: "start" }}>
                 <Stack spacing={3} sx={{ minWidth: 0 }}>
@@ -342,7 +138,13 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         <CardContent><Content description={issue.description} images={issue.images} /></CardContent>
                     </Card>
 
-                    {replies.map((reply) => reply.kind !== "reply" ? <Stack key={reply.kind + reply.id} direction="row" spacing={2} sx={{ alignItems: "center", py: 1, pl: 2 }}>
+                    {replies.map((reply, index) => <Fragment key={reply.kind + reply.id}>
+                    {index === 10 && hiddenCount > 0 && <Paper id="timeline-gap" variant="outlined" sx={{ p: 2 }}><Stack spacing={1}>
+                        <Typography variant="body2">中间还有 {hiddenCount} 条记录未展开 (共 {total} 条)。</Typography>
+                        <Button disabled={saving || loading || expanding || editing !== null} onClick={() => void expand()}>{expanding ? "正在展开…" : "展开较早的 20 条记录"}</Button>
+                        {hasSeparateTarget && <Typography variant="caption" color="text.secondary">下方单独展示定位的评论；展开记录后会自动合并。</Typography>}
+                    </Stack></Paper>}
+                    {reply.kind !== "reply" ? <Stack direction="row" spacing={2} sx={{ alignItems: "center", py: 1, pl: 2 }}>
                         <Avatar sx={{ width: 32, height: 32, fontSize: 16, bgcolor: reply.kind === "status" ? (reply.details.after === "Open" ? "var(--positive-bg)" : reply.details.stateReason === "completed" ? "var(--done-bg)" : "var(--neutral-bg)") : "var(--timeline-bg)", color: reply.kind === "status" ? "common.white" : "text.secondary" }}>
                             {reply.kind === "status" ? (reply.details.after === "Open" ? "○" : reply.details.stateReason === "completed" ? "✓" : "−") : "•"}
                         </Avatar>
@@ -364,13 +166,15 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                             })}
                             <Typography component="time" dateTime={reply.createdAt} variant="caption" color="text.secondary">{new Date(reply.createdAt).toLocaleString("sv-SE")}</Typography>
                         </Stack>
-                    </Stack> : <Card id={"reply-" + reply.id} key={"reply" + reply.id} variant="outlined" sx={{ boxShadow: "none", borderRadius: 1, borderColor: String(reply.id) === replyTarget ? "primary.main" : "divider" }}>
+                    </Stack> : <Card id={"reply-" + reply.id} variant="outlined" sx={{ boxShadow: "none", borderRadius: 1, borderColor: String(reply.id) === target ? "primary.main" : "divider" }}>
                         <CardHeader avatar={<Avatar>{reply.authorName.slice(0, 1)}</Avatar>} title={reply.authorName} subheader={new Date(reply.createdAt).toLocaleString("sv-SE")}
                             action={reply.authorId === issue.authorId ? <Chip label="作者" size="small" variant="outlined" /> : undefined} sx={{ bgcolor: "var(--surface-muted)" }} />
                         <Divider />
                         <CardContent><Stack spacing={2}>
                             {editing === reply.id ? <EditReplyForm reply={reply} saving={saving} onCancel={() => setEditing(null)} onSave={async (description, retainedImages, images, version) => {
                                 if (saving) return;
+                                const pageUrl = window.location.href;
+                                const historyIndex = window.history.state?.aldarisIndex;
                                 setSaving(true);
                                 setError("");
                                 const body = new FormData();
@@ -378,43 +182,59 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                 for (const key of retainedImages) body.append("retainedImages", key);
                                 for (const file of images) body.append("images", file);
                                 try {
-                                    await api(`/api/replies/${reply.id}`, { method: "PATCH", headers: { "If-Match": `"${version}"` }, body });
+                                    await api(`/api/replies/${reply.id}`, { method: "PATCH", headers: { "If-Match": `"${version}"` }, body, expectedSession: apiSession });
+                                    assertApiSession(apiSession);
+                                    if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return;
                                     setEditing(null);
                                     setRefresh(value => value + 1);
-                                } catch (error) { setError(`编辑评论失败：${String(error)}`); }
-                                finally { setSaving(false); }
+                                } finally { setSaving(false); }
                             }} /> : <Content description={reply.description} images={reply.images} />}
                             {(user?.id === reply.authorId || user?.role === "admin") && editing !== reply.id && <Stack direction="row" spacing={1}>
-                                <Button variant="text" disabled={saving || loading || editing !== null} onClick={() => {
+                                <Button variant="text" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
                                     setEditing(reply.id);
                                     setError("");
                                 }}>编辑</Button>
-                                <Button variant="text" color="error" disabled={saving || loading || editing !== null} onClick={() => { setError(""); setDeleting({ id: reply.id, version: reply.version }); }}>删除</Button>
+                                <Button variant="text" color="error" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
+                                    setError("");
+                                    setDeleteConflict(false);
+                                    setDeletePreview(null);
+                                    setDeleting({ id: reply.id, version: reply.version });
+                                }}>删除</Button>
                             </Stack>}
                         </Stack>
-                    </CardContent></Card>)}
-                    {total > 20 && <Pagination sx={{ bgcolor: "background.default", py: 1 }} page={page} count={Math.ceil(total / 20)} disabled={saving || loading || editing !== null} onChange={(_, value) => setPage(value)} />}
+                    </CardContent></Card>}</Fragment>)}
                     {user ? <ReplyForm saving={saving} blocked={loading || detailLoading || !!loadError || !!detailError} editing={editing !== null} onStatus={async (status, reason, replied) => {
                         if (!canEdit) return;
                         const changed = await updateIssue("status", status, reason);
-                        if (changed) setPage(Math.ceil((total + (replied ? 2 : 1)) / 20));
-                        else if (replied) setError("回复已发表，但工单状态更新失败。请重试状态操作，无需重复发表回复。");
-                    }} onReply={async (description, images) => {
+                        if (!changed && replied) setError("回复已发表，但工单状态更新失败。请核对最新属性后重试状态操作，无需重复发表回复。");
+                    }} onReply={async (description, images, key) => {
+                        const pageUrl = window.location.href;
+                        const historyIndex = window.history.state?.aldarisIndex;
                         setSaving(true);
                         setError("");
                         const body = new FormData();
                         body.set("description", description);
                         for (const file of images) body.append("images", file);
                         try {
-                            await api(`/api/issues/${id}/replies`, { method: "POST", body });
-                            setPage(Math.ceil((total + 1) / 20));
+                            const response = await api(`/api/issues/${id}/replies`, { method: "POST", headers: { "Idempotency-Key": key }, body, expectedSession: apiSession });
+                            const created: { id: number } = await response.json();
+                            assertApiSession(apiSession);
+                            if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return false;
+                            setTarget(String(created.id));
+                            window.history.replaceState(window.history.state, "", `/issues/${id}?reply=${created.id}`);
+                            const replyUrl = window.location.href;
+                            requestAnimationFrame(() => {
+                                if (mounted.current && window.location.href === replyUrl && window.history.state?.aldarisIndex === historyIndex && getApiSessionGeneration() === apiSession) {
+                                    window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+                                }
+                            });
                             setRefresh((value) => value + 1);
                             return true;
                         } catch (error) {
-                            setError(`回复失败：${String(error)}`);
+                            if (mounted.current) setError(`回复失败：${String(error)}`);
                             return false;
                         } finally {
-                            setSaving(false);
+                            if (mounted.current) setSaving(false);
                         }
                     }}>
                         {(hasContent, submitStatus, disabled) => canEdit && <>
@@ -449,9 +269,9 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         <Divider />
                         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                             <Typography variant="body2" color="text.secondary">优先级</Typography>
-                            {canEdit && !editingPriority && <Button variant="text" disabled={saving} onClick={() => setEditingPriority(true)}>修改</Button>}
+                            {canEdit && !editingPriority && <Button variant="text" disabled={saving || editing !== null} onClick={() => setEditingPriority(true)}>修改</Button>}
                         </Stack>
-                        {editingPriority ? <Stack spacing={1}><TextField select label="修改优先级" size="small" value={issue.priority} disabled={saving} onChange={(event) => updateIssue("priority", event.target.value)}>
+                        {editingPriority ? <Stack spacing={1}><TextField select label="修改优先级" size="small" value={issue.priority} disabled={saving || editing !== null} onChange={(event) => updateIssue("priority", event.target.value)}>
                             <MenuItem value="Low">低</MenuItem>
                             <MenuItem value="Medium">中</MenuItem>
                             <MenuItem value="High">高</MenuItem>
@@ -459,30 +279,15 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                             : <Box><Chip variant="outlined" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} /></Box>}
                         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                             <Typography variant="body2" color="text.secondary">负责人</Typography>
-                            {canEdit && !editingAssignee && <Button variant="text" disabled={saving} onClick={() => {
-                                setAssignees(issue.assignees);
-                                setAssignmentVersion(issue.assignmentVersion);
+                            {canEdit && !editingAssignee && <Button variant="text" disabled={saving || editing !== null} onClick={() => {
                                 setEditingAssignee(true);
                             }}>修改</Button>}
                         </Stack>
-                        {editingAssignee ? <Stack spacing={1}>
-                            {assignmentRoles.map(role => <UserPicker key={role} label={assignmentLabels[role]} value={assignees.filter(member => member.role === role)}
-                                onChange={members => setAssignees(current => [...current.filter(member => member.role !== role), ...members.map(member => ({ ...member, role }))])} disabled={saving} />)}
-                            <Button variant="contained" disabled={saving} onClick={async () => {
-                                setSaving(true); setError("");
-                                const body = new FormData();
-                                for (const member of assignees) body.append(member.role, String(member.id));
-                                try {
-                                    const response = await api(`/api/issues/${id}/assignees`, { method: "POST", headers: { "If-Match": `"${assignmentVersion}"` }, body });
-                                    const changed: Pick<Issue, "assignees" | "assignmentVersion"> = await response.json();
-                                    setIssue(current => current ? { ...current, ...changed } : current);
-                                    setEditingAssignee(false);
-                                    setRefresh(value => value + 1);
-                                } catch (error) { setError(`指派失败：${String(error)}`); }
-                                finally { setSaving(false); }
-                            }}>保存指派</Button>
-                            <Button variant="text" disabled={saving} onClick={() => setEditingAssignee(false)}>取消</Button>
-                        </Stack> : assignmentRoles.map(role => {
+                        {editingAssignee ? <AssigneeEditor issue={issue} saving={saving} onSavingChange={setSaving} onCancel={() => setEditingAssignee(false)} onSaved={changed => {
+                            setIssue(current => current ? { ...current, ...changed } : current);
+                            setEditingAssignee(false);
+                            setRefresh(value => value + 1);
+                        }} /> : assignmentRoles.map(role => {
                             const members = issue.assignees.filter(member => member.role === role);
                             return <Stack key={role} spacing={0.5}>
                                 <Typography variant="caption" color="text.secondary">{assignmentLabels[role]}</Typography>
@@ -498,20 +303,61 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
             <DialogContent>
                 <DialogContentText id="delete-reply-description">删除这条评论及其全部图片？此操作无法撤销。</DialogContentText>
                 {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+                {deleteConflict && <Alert severity="warning" sx={{ mt: 2 }} action={<Button color="inherit" disabled={saving} onClick={async () => {
+                    if (saving || !deleting) return;
+                    setSaving(true);
+                    setDeleteLoading(true);
+                    setError("");
+                    try {
+                        const response = await api(`/api/replies/${deleting.id}`, { expectedSession: apiSession });
+                        const data: { reply: Reply } = await response.json();
+                        assertApiSession(apiSession);
+                        if (!mounted.current) return;
+                        setDeletePreview(data.reply);
+                        setDeleting({ id: data.reply.id, version: data.reply.version });
+                        setDeleteConflict(false);
+                    } catch (error) {
+                        if (!mounted.current) return;
+                        if (error instanceof ApiError && error.status === 404) {
+                            setDeleting(null);
+                            setRefresh(value => value + 1);
+                            setError("评论已不存在，正在刷新时间线。");
+                        } else setError(`读取待删除评论失败：${String(error)}`);
+                    } finally {
+                        if (mounted.current) { setSaving(false); setDeleteLoading(false); }
+                    }
+                }}>{deleteLoading ? "载入中…" : "载入最新评论"}</Button>}>评论已被修改，请载入最新内容，核对后再次确认删除。</Alert>}
+                {deletePreview && <Stack spacing={2} sx={{ mt: 2 }}>
+                    <Typography variant="subtitle2">当前待删除版本 {deletePreview.version}，请核对内容与图片。</Typography>
+                    <Content description={deletePreview.description} images={deletePreview.images} />
+                </Stack>}
             </DialogContent>
             <DialogActions>
                 <Button color="inherit" disabled={saving} onClick={() => setDeleting(null)} autoFocus>取消</Button>
-                <Button color="error" disabled={saving} onClick={async () => {
-                    if (saving || !deleting) return;
+                <Button color="error" disabled={saving || deleteConflict} onClick={async () => {
+                    if (saving || deleteConflict || !deleting) return;
                     setSaving(true);
                     setError("");
                     try {
-                        await api(`/api/replies/${deleting.id}`, { method: "DELETE", headers: { "If-Match": `"${deleting.version}"` } });
+                        await api(`/api/replies/${deleting.id}`, { method: "DELETE", headers: { "If-Match": `"${deleting.version}"` }, expectedSession: apiSession });
+                        assertApiSession(apiSession);
+                        if (!mounted.current) return;
                         setDeleting(null);
                         setRefresh(value => value + 1);
-                    } catch (error) { setError(`删除评论失败：${String(error)}`); }
-                    finally { setSaving(false); }
-                }}>{saving ? "删除中…" : "确认删除"}</Button>
+                    } catch (error) {
+                        if (!mounted.current) return;
+                        if (error instanceof ApiError && error.status === 409) {
+                            setDeleteConflict(true);
+                            setDeletePreview(null);
+                        } else if (error instanceof ApiError && error.status === 404) {
+                            setDeleting(null);
+                            setRefresh(value => value + 1);
+                            setError("评论已不存在，正在刷新时间线。");
+                            return;
+                        }
+                        setError(`删除评论失败：${String(error)}`);
+                    } finally { if (mounted.current) setSaving(false); }
+                }}>{deleteLoading ? "载入中…" : saving ? "删除中…" : deletePreview ? "确认删除此版本" : "确认删除"}</Button>
             </DialogActions>
         </Dialog>
     </Stack>;

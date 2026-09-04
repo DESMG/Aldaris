@@ -1,22 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Badge, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, LinearProgress, Pagination, Paper, Snackbar, Stack, SvgIcon, Typography } from "@mui/material";
-import { api, cachedJson, getCachedJson, navigate } from "./api";
+import { Alert, Badge, Box, Button, Checkbox, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, LinearProgress, Paper, Snackbar, Stack, SvgIcon, Typography } from "@mui/material";
+import { api, assertApiSession, cachedJson, getApiSessionGeneration, getCachedJson, navigate } from "./api";
 import { assignmentLabels } from "../shared/assignments";
-import type { AssignmentRole } from "../shared/assignments";
-
-type Notification = {
-    id: number;
-    issueId: number;
-    replyId: number | null;
-    issueTitle: string;
-    actorName: string;
-    kind: "mention" | "assignment";
-    assignmentRole: AssignmentRole | null;
-    createdAt: string;
-    readAt: string | null;
-};
-
-type NotificationsData = { notifications: Notification[]; total: number };
+import type { Notification, NotificationsPage } from "../shared/types";
+import { NOTIFICATION_BATCH_LIMIT } from "../shared/limits";
 
 export function NotificationLink() {
     const [total, setTotal] = useState<number | null>(null);
@@ -61,11 +48,12 @@ export function NotificationLink() {
 }
 
 export default function Notifications() {
-    const cached = getCachedJson<NotificationsData>("/api/notifications?filter=all&page=1");
+    const apiSession = getApiSessionGeneration();
+    const cached = getCachedJson<NotificationsPage>("/api/notifications?filter=all");
     const [notifications, setNotifications] = useState<Notification[]>(cached?.notifications ?? []);
     const [selected, setSelected] = useState<number[]>([]);
-    const [page, setPage] = useState(1);
-    const [total, setTotal] = useState(cached?.total ?? 0);
+    const [before, setBefore] = useState(0);
+    const [next, setNext] = useState<number | null>(cached?.next ?? null);
     const [loading, setLoading] = useState(!cached);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
@@ -75,33 +63,36 @@ export default function Notifications() {
     const [message, setMessage] = useState("");
     useEffect(() => {
         let cancelled = false;
-        const url = `/api/notifications?filter=all&page=${page}`;
+        const url = `/api/notifications?filter=all${before ? `&before=${before}` : ""}`;
         const force = forceRefresh.current;
         forceRefresh.current = false;
-        setLoading(force || !getCachedJson(url)); setError(""); setSelected([]);
-        cachedJson<NotificationsData>(url, { refresh: force })
+        setLoading(force || !getCachedJson(url)); setError("");
+        cachedJson<NotificationsPage>(url, { refresh: force })
             .then(data => {
                 if (cancelled) return;
-                const lastPage = Math.max(1, Math.ceil(data.total / 20));
-                if (page > lastPage) { setPage(lastPage); return; }
-                setNotifications(data.notifications); setTotal(data.total);
+                setNotifications(current => before ? [...current.filter(item => item.id >= before), ...data.notifications] : data.notifications);
+                setNext(data.next);
             }).catch(error => { if (!cancelled) setError(`读取通知失败：${String(error)}`); })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [page, refresh]);
-    async function updateNotifications(ids: number[], action: "read" | "unread" | "delete") {
+    }, [before, refresh]);
+    async function updateNotifications(ids: number[], action: "read" | "unread" | "delete", background = false) {
         if (saving || loading || !ids.length) return false;
         setSaving(true); setError("");
         try {
             const form = new FormData();
             for (const id of ids) form.append("id", String(id));
-            const response = await api(`/api/notifications/${action}`, { method: "POST", body: form, keepalive: true });
+            const response = await api(`/api/notifications/${action}`, { method: "POST", body: form, keepalive: true, expectedSession: apiSession });
+            assertApiSession(apiSession);
             if (action === "read") {
                 const data: { readAt: string } = await response.json();
+                assertApiSession(apiSession);
                 setNotifications(current => current.map(notification => ids.includes(notification.id) && notification.readAt === null ? { ...notification, readAt: data.readAt } : notification));
             } else if (action === "unread") {
                 setNotifications(current => current.map(notification => ids.includes(notification.id) ? { ...notification, readAt: null } : notification));
             } else {
+                setBefore(0);
+                setSelected([]);
                 setRefresh(value => value + 1);
                 setDeleting([]);
                 setMessage("通知已删除。");
@@ -111,6 +102,12 @@ export default function Notifications() {
             return true;
         } catch (error) {
             setError(`${action === "read" ? "标记已读" : action === "unread" ? "标记未读" : "删除通知"}失败：${String(error)}`);
+            if (background) {
+                try {
+                    assertApiSession(apiSession);
+                    window.dispatchEvent(new CustomEvent("app-notice", { detail: `标记通知已读失败，请在通知中心重试：${String(error)}` }));
+                } catch { /* Account changes must not display the previous account's errors. */ }
+            }
             return false;
         } finally { setSaving(false); }
     }
@@ -118,14 +115,14 @@ export default function Notifications() {
         <Box><Button color="inherit" variant="outlined" href="/" disabled={saving}>← 返回列表</Button></Box>
         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
             <Typography component="h1" variant="h5">个人通知中心</Typography>
-            <Button variant="outlined" disabled={loading || saving} onClick={() => { forceRefresh.current = true; setRefresh(value => value + 1); }}>刷新</Button>
+            <Button variant="outlined" disabled={loading || saving} onClick={() => { forceRefresh.current = true; setBefore(0); setSelected([]); setRefresh(value => value + 1); }}>刷新</Button>
         </Stack>
         <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-            <FormControlLabel label="全选本页" control={<Checkbox disabled={loading || saving || !notifications.length}
-                checked={notifications.length > 0 && selected.length === notifications.length}
-                indeterminate={selected.length > 0 && selected.length < notifications.length}
-                onChange={(_, checked) => setSelected(checked ? notifications.map(notification => notification.id) : [])} />} />
-            <Typography variant="body2">已勾选 {selected.length} 条</Typography>
+            <FormControlLabel label={`选择前 ${NOTIFICATION_BATCH_LIMIT} 条`} control={<Checkbox disabled={loading || saving || !notifications.length}
+                checked={notifications.length > 0 && notifications.slice(0, NOTIFICATION_BATCH_LIMIT).every(item => selected.includes(item.id))}
+                indeterminate={selected.length > 0 && !notifications.slice(0, NOTIFICATION_BATCH_LIMIT).every(item => selected.includes(item.id))}
+                onChange={(_, checked) => setSelected(checked ? notifications.slice(0, NOTIFICATION_BATCH_LIMIT).map(notification => notification.id) : [])} />} />
+            <Typography variant="body2">已勾选 {selected.length}/{NOTIFICATION_BATCH_LIMIT} 条</Typography>
             <Button variant="outlined" disabled={loading || saving || !notifications.some(notification => selected.includes(notification.id) && notification.readAt === null)} onClick={() => void updateNotifications(selected, "read")}>一键已读</Button>
             <Button variant="outlined" disabled={loading || saving || !notifications.some(notification => selected.includes(notification.id) && notification.readAt !== null)} onClick={() => void updateNotifications(selected, "unread")}>一键未读</Button>
             <Button variant="outlined" color="error" disabled={loading || saving || !selected.length} onClick={() => { setError(""); setDeleting([...selected]); }}>一键删除</Button>
@@ -136,24 +133,24 @@ export default function Notifications() {
         {notifications.map(notification => <Paper key={notification.id} variant="outlined" sx={{ p: 2.5, borderLeft: "4px solid", borderLeftColor: notification.readAt === null ? "primary.main" : "divider" }}>
             <Stack spacing={1.5}>
                 <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                    <Checkbox checked={selected.includes(notification.id)} disabled={loading || saving} slotProps={{ input: { "aria-label": `选择通知 #${notification.id}` } }} onChange={(_, checked) => setSelected(current => checked ? [...current, notification.id] : current.filter(id => id !== notification.id))} />
+                    <Checkbox checked={selected.includes(notification.id)} disabled={loading || saving || (selected.length >= NOTIFICATION_BATCH_LIMIT && !selected.includes(notification.id))} slotProps={{ input: { "aria-label": `选择通知 #${notification.id}` } }} onChange={(_, checked) => setSelected(current => checked ? [...current, notification.id] : current.filter(id => id !== notification.id))} />
                     <Chip size="small" label={notification.kind === "mention" ? "提及了你" : notification.assignmentRole === null ? "指派给你" : `指派为${assignmentLabels[notification.assignmentRole]}`} color={notification.readAt === null ? "primary" : "default"} variant="outlined" />
                     <Typography variant="body2">{notification.actorName}</Typography>
                     <Typography variant="caption" color="text.secondary">{notification.readAt === null ? "未读" : "已读"}</Typography>
                 </Stack>
-                <Typography component="a" href={loading ? undefined : `/issues/${notification.issueId}${notification.replyId === null ? "" : `?reply=${notification.replyId}`}`} aria-disabled={loading || saving} tabIndex={loading ? -1 : undefined} onClick={async event => {
-                    if (loading || saving) { event.preventDefault(); return; }
+                <Typography component="a" href={`/issues/${notification.issueId}${notification.replyId === null ? "" : `?reply=${notification.replyId}`}`} onClick={event => {
                     if (notification.readAt !== null) return;
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                        void updateNotifications([notification.id], "read");
+                        void updateNotifications([notification.id], "read", true);
                         return;
                     }
                     event.preventDefault();
                     const destination = event.currentTarget.getAttribute("href")!;
-                    if (await updateNotifications([notification.id], "read")) navigate(destination);
+                    void updateNotifications([notification.id], "read", true);
+                    try { assertApiSession(apiSession); navigate(destination); }
+                    catch (error) { setError(`打开工单失败：${String(error)}`); }
                 }} onAuxClick={event => {
-                    if (loading) { event.preventDefault(); return; }
-                    if (event.button === 1 && notification.readAt === null) void updateNotifications([notification.id], "read");
+                    if (event.button === 1 && notification.readAt === null) void updateNotifications([notification.id], "read", true);
                 }} sx={{ color: "primary.main", overflowWrap: "anywhere" }}>#{notification.issueId} {notification.issueTitle}</Typography>
                 <Typography variant="caption" color="text.secondary">{new Date(notification.createdAt).toLocaleString("sv-SE")}</Typography>
                 <Stack direction="row" spacing={1}>
@@ -162,7 +159,7 @@ export default function Notifications() {
                 </Stack>
             </Stack>
         </Paper>)}
-        {total > 20 && <Pagination page={page} count={Math.ceil(total / 20)} disabled={loading || saving} onChange={(_, value) => setPage(value)} />}
+        {next !== null && <Button disabled={loading || saving} onClick={() => setBefore(next)}>加载更多通知</Button>}
         <Dialog open={deleting.length > 0} onClose={() => { if (!saving) setDeleting([]); }} fullWidth maxWidth="xs" aria-labelledby="delete-notifications-title" aria-describedby="delete-notifications-description">
             <DialogTitle id="delete-notifications-title">删除通知</DialogTitle>
             <DialogContent>

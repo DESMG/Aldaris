@@ -1,214 +1,34 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 
-import { Alert, Avatar, Box, Button, Divider, IconButton, LinearProgress, Menu, MenuItem, Stack, SvgIcon, Typography } from "@mui/material";
+import { Alert, Avatar, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, GlobalStyles, IconButton, LinearProgress, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
 import Container from "@mui/material/Container";
 import CssBaseline from "@mui/material/CssBaseline";
-import { createTheme, ThemeProvider, useColorScheme } from "@mui/material/styles";
-import Issues, { initialIssuesView } from "./Issues";
+import { ThemeProvider } from "@mui/material/styles";
+import theme from "./theme";
+import ThemeToggle from "./ThemeToggle";
+import OperationEvents from "./OperationEvents";
+import { confirmDraftNavigation, discardDraftGuards, hasUnsavedDrafts } from "./DraftGuard";
+import Issues from "./Issues";
 import IssueDetail from "./IssueDetail";
 import AuthPage from "./AuthPage";
 import Users from "./Users";
 import Notifications, { NotificationLink } from "./Notifications";
-import { api, clearApiCache, navigate, resetApiSession } from "./api";
+import { api, navigate, getLoginSession, setLoginSession, synchronizeSession, LOGIN_STORAGE_KEY, getApiSessionGeneration, assertApiSession } from "./api";
 import type { User } from "./api";
 
-const theme = createTheme({
-    cssVariables: {
-        colorSchemeSelector: "class",
-        cssVarPrefix: "theme",
-    },
-    colorSchemes: {
-        light: { palette: {
-            primary: { main: "#0969da", light: "#ddf4ff", dark: "#0550ae", contrastText: "#ffffff" },
-            secondary: { main: "#8250df", light: "#fbefff", dark: "#6639ba", contrastText: "#ffffff" },
-            success: { main: "#1a7f37", light: "#dafbe1", dark: "#116329", contrastText: "#ffffff" },
-            info: { main: "#0969da", light: "#ddf4ff", dark: "#0550ae", contrastText: "#ffffff" },
-            warning: { main: "#9a6700", light: "#fff8c5", dark: "#7d4e00", contrastText: "#ffffff" },
-            error: { main: "#d1242f", light: "#ffebe9", dark: "#a40e26", contrastText: "#ffffff" },
-            background: { default: "#ffffff", paper: "#ffffff" },
-            text: { primary: "#1f2328", secondary: "#59636e", disabled: "#818b98" },
-            divider: "#d1d9e0",
-            action: { active: "#59636e", hover: "#818b981a", selected: "#818b9826", disabled: "#818b98", disabledBackground: "#eff2f5", focus: "#0969da26", hoverOpacity: 0.1, selectedOpacity: 0.15, focusOpacity: 0.15 },
-        } },
-        dark: { palette: {
-            primary: { main: "#4493f8", light: "#388bfd1a", dark: "#79c0ff", contrastText: "#ffffff" },
-            secondary: { main: "#ab7df8", light: "#ab7df826", dark: "#d2a8ff", contrastText: "#ffffff" },
-            success: { main: "#3fb950", light: "#2ea04326", dark: "#56d364", contrastText: "#ffffff" },
-            info: { main: "#4493f8", light: "#388bfd1a", dark: "#79c0ff", contrastText: "#ffffff" },
-            warning: { main: "#d29922", light: "#bb800926", dark: "#e3b341", contrastText: "#ffffff" },
-            error: { main: "#f85149", light: "#f851491a", dark: "#ff7b72", contrastText: "#ffffff" },
-            background: { default: "#0d1117", paper: "#0d1117" },
-            text: { primary: "#f0f6fc", secondary: "#9198a1", disabled: "#656c76" },
-            divider: "#3d444d",
-            action: { active: "#9198a1", hover: "#656c7633", selected: "#656c7633", disabled: "#656c76", disabledBackground: "#212830", focus: "#4493f826", hoverOpacity: 0.2, selectedOpacity: 0.2, focusOpacity: 0.15 },
-        } },
-    },
-    shape: { borderRadius: 12 },
-    transitions: { duration: { shortest: 300, shorter: 400, short: 500, standard: 600, complex: 750, enteringScreen: 450, leavingScreen: 390 } },
-    typography: {
-        fontFamily: [
-            "JetBrains Mono",
-            "Noto Sans SC",
-            "Apple Color Emoji",
-            "Segoe UI Emoji",
-            "Segoe UI Symbol",
-            "Noto Color Emoji",
-            "system-ui",
-            "-apple-system",
-            "emoji",
-            "monospace",
-        ].join(","),
-        fontSize: 14,
-        body1: { fontSize: "0.875rem" },
-        body2: { fontSize: "0.8125rem" },
-        h4: { fontWeight: 750, fontSize: "1.75rem" },
-        h5: { fontWeight: 700 },
-        h6: { fontWeight: 650 },
-    },
-    components: {
-        MuiCssBaseline: {
-            styleOverrides: {
-                ":root, .light": {
-                    "--surface-muted": "#f6f8fa", "--surface-overlay": "#ffffff", "--control-bg": "#f6f8fa", "--control-hover": "#eff2f5", "--control-active": "#e6eaef",
-                    "--positive-bg": "#1f883d", "--positive-hover": "#1c8139", "--positive-active": "#197935", "--positive-disabled": "#95d8a6",
-                    "--done-bg": "#8250df", "--neutral-bg": "#59636e", "--timeline-bg": "#f6f8fa", "--accent-bg": "#0969da", "--danger-bg": "#cf222e", "--danger-hover": "#cf222e", "--danger-active": "#a40e26", "--danger-text": "#d1242f",
-                    "--nav-active": "#fd8c73", "--overlay-backdrop": "#c8d1da66", "--overlay-shadow": "0 8px 24px #1f232833",
-                    "--primary-border": "#54aeff66", "--info-border": "#54aeff66", "--secondary-border": "#c297ff66", "--success-border": "#4ac26b66", "--warning-border": "#d4a72c66", "--error-border": "#ff818266",
-                    "--emphasis-border": "#1f232826", "--positive-disabled-text": "#ffffffcc",
-                },
-                ".dark": {
-                    "--surface-muted": "#151b23", "--surface-overlay": "#010409", "--control-bg": "#212830", "--control-hover": "#262c36", "--control-active": "#2a313c",
-                    "--positive-bg": "#238636", "--positive-hover": "#29903b", "--positive-active": "#2e9a40", "--positive-disabled": "#105823",
-                    "--done-bg": "#8957e5", "--neutral-bg": "#656c76", "--timeline-bg": "#212830", "--accent-bg": "#1f6feb", "--danger-bg": "#da3633", "--danger-hover": "#b62324", "--danger-active": "#da3633", "--danger-text": "#fa5e55",
-                    "--nav-active": "#f78166", "--overlay-backdrop": "#21283066", "--overlay-shadow": "0 8px 24px #01040999",
-                    "--primary-border": "#388bfd66", "--info-border": "#388bfd66", "--secondary-border": "#ab7df866", "--success-border": "#2ea04366", "--warning-border": "#bb800966", "--error-border": "#f8514966",
-                    "--emphasis-border": "#ffffff26", "--positive-disabled-text": "#ffffff66",
-                },
-                "a": { color: "var(--theme-palette-primary-main)" },
-                "::selection": { backgroundColor: "var(--theme-palette-action-focus)" },
-                ":focus-visible, .MuiButtonBase-root.Mui-focusVisible": { outline: "2px solid var(--theme-palette-primary-main)", outlineOffset: 2 },
-                "@keyframes enterContent": {
-                    from: { opacity: 0, transform: "translateY(6px)" },
-                    to: { opacity: 1, transform: "translateY(0)" },
-                },
-                ".page-content": { animation: "enterContent 440ms ease-out" },
-                ".MuiPaper-outlined, .MuiAlert-root": { animation: "enterContent 360ms ease-out" },
-                "@keyframes revealTheme": {
-                    from: { clipPath: "circle(0px at var(--reveal-x) var(--reveal-y))" },
-                    to: { clipPath: "circle(var(--reveal-radius) at var(--reveal-x) var(--reveal-y))" },
-                },
-                "::view-transition-old(root), ::view-transition-new(root)": { mixBlendMode: "normal", animation: "none" },
-                "::view-transition-new(root)": { animation: "revealTheme 440ms ease-in-out" },
-                "@media (prefers-reduced-motion: reduce)": {
-                    "*, *::before, *::after": { animation: "none !important", transition: "none !important", scrollBehavior: "auto !important" },
-                },
-            },
-        },
-        MuiButton: {
-            defaultProps: { variant: "outlined", disableElevation: true },
-            styleOverrides: { root: ({ theme }) => ({
-                textTransform: "none", fontWeight: 650, borderRadius: 8,
-                "&.MuiButton-outlined, &.MuiButton-contained": {
-                    color: theme.vars!.palette.text.primary, backgroundColor: "var(--control-bg)", border: "1px solid", borderColor: theme.vars!.palette.divider,
-                    "&:hover": { backgroundColor: "var(--control-hover)" }, "&:active": { backgroundColor: "var(--control-active)" },
-                },
-                "&.MuiButton-contained.MuiButton-colorPrimary, &.MuiButton-contained.MuiButton-colorSuccess": {
-                    color: "#ffffff", backgroundColor: "var(--positive-bg)", borderColor: "var(--emphasis-border)",
-                    "&:hover": { backgroundColor: "var(--positive-hover)" }, "&:active": { backgroundColor: "var(--positive-active)" },
-                },
-                "&.MuiButton-colorError": {
-                    color: "var(--danger-text)",
-                    "&:hover": { color: "#ffffff", backgroundColor: "var(--danger-hover)", borderColor: "var(--danger-hover)" },
-                    "&:active": { color: "#ffffff", backgroundColor: "var(--danger-active)" },
-                },
-                "&.Mui-disabled": { color: theme.vars!.palette.text.disabled, backgroundColor: theme.vars!.palette.action.disabledBackground, borderColor: theme.vars!.palette.divider },
-                "&.MuiButton-contained.MuiButton-colorPrimary.Mui-disabled, &.MuiButton-contained.MuiButton-colorSuccess.Mui-disabled": { color: "var(--positive-disabled-text)", backgroundColor: "var(--positive-disabled)", borderColor: "var(--positive-disabled)" },
-            }) },
-        },
-        MuiPaper: {
-            styleOverrides: {
-                root: { backgroundImage: "none" },
-                outlined: { boxShadow: "none" },
-            },
-        },
-        MuiTab: { styleOverrides: { root: ({ theme }) => ({ fontWeight: 650, color: theme.vars!.palette.text.secondary, "&.Mui-selected": { color: theme.vars!.palette.text.primary } }) } },
-        MuiTabs: { styleOverrides: { indicator: { backgroundColor: "var(--nav-active)" } } },
-        MuiBackdrop: { styleOverrides: { root: { backgroundColor: "var(--overlay-backdrop)", "&.MuiBackdrop-invisible": { backgroundColor: "transparent" } } } },
-        MuiDialog: { styleOverrides: { paper: ({ theme }) => ({ backgroundColor: "var(--surface-overlay)", border: "1px solid", borderColor: theme.vars!.palette.divider, boxShadow: "var(--overlay-shadow)" }) } },
-        MuiPopover: { styleOverrides: { paper: ({ theme }) => ({ backgroundColor: "var(--surface-overlay)", border: "1px solid", borderColor: theme.vars!.palette.divider, boxShadow: "var(--overlay-shadow)" }) } },
-        MuiAutocomplete: { styleOverrides: { paper: ({ theme }) => ({ backgroundColor: "var(--surface-overlay)", border: "1px solid", borderColor: theme.vars!.palette.divider, boxShadow: "var(--overlay-shadow)" }) } },
-        MuiOutlinedInput: { styleOverrides: { root: ({ theme }) => ({
-            backgroundColor: theme.vars!.palette.background.default,
-            "& .MuiOutlinedInput-notchedOutline": { borderColor: theme.vars!.palette.divider },
-            "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: theme.vars!.palette.text.secondary },
-            "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: theme.vars!.palette.primary.main },
-            "&.Mui-error .MuiOutlinedInput-notchedOutline": { borderColor: theme.vars!.palette.error.main },
-            "&.Mui-disabled": { backgroundColor: theme.vars!.palette.action.disabledBackground },
-            "&.Mui-disabled .MuiOutlinedInput-notchedOutline": { borderColor: theme.vars!.palette.divider },
-            "& input::placeholder, & textarea::placeholder": { color: theme.vars!.palette.text.secondary, opacity: 1 },
-        }) } },
-        MuiChip: { styleOverrides: { root: ({ theme }) => ({
-            backgroundColor: theme.vars!.palette.action.selected, color: theme.vars!.palette.text.primary,
-            "&.MuiChip-colorPrimary, &.MuiChip-colorInfo": { backgroundColor: "var(--accent-bg)", color: "#ffffff" },
-            "&.MuiChip-colorSuccess": { backgroundColor: "var(--positive-bg)", color: "#ffffff" },
-            "&.MuiChip-colorSecondary": { backgroundColor: "var(--done-bg)", color: "#ffffff" },
-            "&.MuiChip-colorError": { backgroundColor: "var(--danger-bg)", color: "#ffffff" },
-            "&.MuiChip-outlined": { backgroundColor: "transparent", color: theme.vars!.palette.text.secondary, borderColor: theme.vars!.palette.divider },
-            ...Object.fromEntries((["primary", "secondary", "success", "info", "warning", "error"] as const).map(color => [`&.MuiChip-outlined.MuiChip-color${color[0].toUpperCase()}${color.slice(1)}`, { color: theme.vars!.palette[color].main, backgroundColor: theme.vars!.palette[color].light, borderColor: `var(--${color}-border)` }])),
-        }) } },
-        MuiAvatar: { styleOverrides: { colorDefault: ({ theme }) => ({ backgroundColor: "var(--control-bg)", color: theme.vars!.palette.text.secondary, border: "1px solid", borderColor: theme.vars!.palette.divider }) } },
-        MuiAlert: { styleOverrides: { root: ({ theme }) => ({
-            ...Object.fromEntries((["success", "info", "warning", "error"] as const).map(color => [`&.MuiAlert-color${color[0].toUpperCase()}${color.slice(1)}`, { color: theme.vars!.palette.text.primary, backgroundColor: theme.vars!.palette[color].light, border: "1px solid", borderColor: `var(--${color}-border)`, "& .MuiAlert-icon": { color: theme.vars!.palette[color].main } }])),
-        }) } },
-        MuiBadge: { styleOverrides: { colorPrimary: { backgroundColor: "var(--accent-bg)", color: "#ffffff" }, colorError: { backgroundColor: "var(--danger-bg)", color: "#ffffff" } } },
-        MuiLinearProgress: { styleOverrides: { root: { backgroundColor: "var(--control-bg)" }, bar: { backgroundColor: "var(--accent-bg)" } } },
-    },
-});
-
-function ThemeToggle() {
-    const { mode, systemMode, setMode } = useColorScheme();
-    const [switching, setSwitching] = useState(false);
-    const dark = (mode === "system" ? systemMode : mode) === "dark";
-    useEffect(() => {
-        document.querySelector('meta[name="theme-color"]')!.setAttribute("content", dark ? "#0d1117" : "#ffffff");
-    }, [dark]);
-    return <IconButton color="inherit" aria-label={dark ? "切换到浅色模式" : "切换到深色模式"} title={dark ? "浅色模式" : "深色模式"} disabled={!mode || switching} onClick={async event => {
-        const next = dark ? "light" : "dark";
-        if (!document.startViewTransition || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-            setMode(next);
-            return;
-        }
-        const rect = event.currentTarget.getBoundingClientRect();
-        const x = rect.left + rect.width / 2;
-        const y = rect.top + rect.height / 2;
-        const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
-        const style = document.documentElement.style;
-        style.setProperty("--reveal-x", `${x}px`);
-        style.setProperty("--reveal-y", `${y}px`);
-        style.setProperty("--reveal-radius", `${radius}px`);
-        setSwitching(true);
-        try {
-            const transition = document.startViewTransition(() => flushSync(() => setMode(next)));
-            await transition.finished;
-        } catch (error) {
-            console.error("主题切换动画失败", error);
-        } finally {
-            setSwitching(false);
-        }
-    }}>
-        <SvgIcon>
-            {dark ? <path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm-1-6h2v4h-2Zm0 18h2v4h-2ZM1 11h4v2H1Zm18 0h4v2h-4ZM4.22 2.81l2.83 2.83-1.41 1.41-2.83-2.83Zm12.73 14.14 2.83 2.83 1.41-1.41-2.83-2.83ZM2.81 19.78l2.83-2.83 1.41 1.41-2.83 2.83ZM16.95 5.64l2.83-2.83 1.41 1.41-2.83 2.83Z" />
-                : <path d="M9.37 5.51A7 7 0 0 0 18.49 14.63 7 7 0 1 1 9.37 5.51ZM12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.11-1.36A5.5 5.5 0 0 1 13.36 3.11 9.3 9.3 0 0 0 12 3Z" />}
-        </SvgIcon>
-    </IconButton>;
-}
-
 export default function App() {
+    const apiSession = getApiSessionGeneration();
     const [path, setPath] = useState(window.location.pathname + window.location.search);
     const [user, setUser] = useState<User | null>(null);
-    const issuesView = useRef(initialIssuesView);
-    const currentUser = useRef<User | null>(null);
+    const [pausedAccount, setPausedAccount] = useState<User | null>(null);
+    const pausedAccountRef = useRef<User | null>(null);
+    const pageUser = pausedAccount ?? user;
+    const pageUserRef = useRef<User | null>(null);
+    pageUserRef.current = pageUser;
+    const [pageVersion, setPageVersion] = useState(0);
+    const [notice, setNotice] = useState("");
+    const historyIndex = useRef(window.history.state?.aldarisIndex ?? 0);
+    const restoringHistory = useRef(false);
     const [setupRequired, setSetupRequired] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -221,72 +41,116 @@ export default function App() {
     const detail = pathname.match(/^\/issues\/(\d+)$/);
     const replyTarget = new URLSearchParams(path.split("?")[1]).get("reply");
 
-    function handleUserChange(nextUser: User | null) {
-        if (currentUser.current?.id !== nextUser?.id || currentUser.current?.role !== nextUser?.role) {
-            resetApiSession();
-            issuesView.current = initialIssuesView;
+    function syncUser(nextUser: User | null) {
+        const owner = pageUserRef.current;
+        if (owner && nextUser?.id !== owner.id && hasUnsavedDrafts()) {
+            // This records the editor's owner, never an authenticated session.
+            pausedAccountRef.current = owner;
+            setPausedAccount(owner);
+        } else if (nextUser && pausedAccountRef.current?.id === nextUser.id) {
+            pausedAccountRef.current = null;
+            setPausedAccount(null);
         }
-        else clearApiCache();
-        currentUser.current = nextUser;
+        setUser(nextUser);
+    }
+
+    function handleUserChange(nextUser: User | null) {
+        const session = getLoginSession();
+        if (!nextUser) setLoginSession(null);
+        else if (session && (session.user.name !== nextUser.name || session.user.username !== nextUser.username || session.user.role !== nextUser.role)) setLoginSession({ ...session, user: nextUser });
         authController.current?.abort();
         authController.current = null;
         lastAuthCheck.current = Date.now();
-        setUser(nextUser);
+        syncUser(nextUser);
         setSetupRequired(false);
         setError("");
         setLoading(false);
     }
 
     useEffect(() => {
-        if (!loading && !error && !user && pathname !== "/login") {
+        if (!loading && !error && !user && !pausedAccount && pathname !== "/login") {
             const loginPath = `/login?next=${encodeURIComponent(path)}`;
-            window.history.replaceState(null, "", loginPath);
+            window.history.replaceState(window.history.state, "", loginPath);
             setPath(loginPath);
         }
-    }, [loading, error, user, pathname, path]);
+    }, [loading, error, user, pausedAccount, pathname, path]);
 
     useEffect(() => {
-        const route = () => setPath(window.location.pathname + window.location.search);
-        const expired = () => {
+        window.history.replaceState({ ...window.history.state, aldarisIndex: historyIndex.current }, "");
+        const route = (event: PopStateEvent) => {
+            const nextIndex = window.history.state?.aldarisIndex ?? 0;
+            if (restoringHistory.current) { restoringHistory.current = false; return; }
+            if (event.isTrusted && nextIndex !== historyIndex.current && !confirmDraftNavigation()) {
+                restoringHistory.current = true;
+                window.history.go(historyIndex.current - nextIndex);
+                return;
+            }
+            if (pausedAccountRef.current) {
+                discardDraftGuards();
+                pausedAccountRef.current = null;
+                setPausedAccount(null);
+            }
+            historyIndex.current = nextIndex;
+            setPath(window.location.pathname + window.location.search);
+        };
+        const changed = () => {
             authController.current?.abort();
             authController.current = null;
-            currentUser.current = null;
-            issuesView.current = initialIssuesView;
-            setUser(null);
-            setError("");
-            setLoading(false);
+            try { syncUser(getLoginSession()?.user ?? null); setError(""); }
+            catch (error) { syncUser(null); setError(String(error)); }
+            setAccountAnchor(null);
+            setNotice("");
+            setRefresh(value => value + 1);
+        };
+        const storage = (event: StorageEvent) => {
+            if (event.storageArea === localStorage && (event.key === LOGIN_STORAGE_KEY || event.key === null)) synchronizeSession();
         };
         const focus = () => {
-            if (!authController.current && Date.now() - lastAuthCheck.current >= 60_000) {
-                setRefresh((value) => value + 1);
-            }
+            synchronizeSession();
+            if (!authController.current && Date.now() - lastAuthCheck.current >= 60_000) setRefresh(value => value + 1);
         };
+        const notify = (event: Event) => setNotice((event as CustomEvent<string>).detail);
         window.addEventListener("popstate", route);
-        window.addEventListener("auth-expired", expired);
+        window.addEventListener("auth-session-changed", changed);
+        window.addEventListener("storage", storage);
         window.addEventListener("focus", focus);
+        window.addEventListener("app-notice", notify);
         return () => {
             window.removeEventListener("popstate", route);
-            window.removeEventListener("auth-expired", expired);
+            window.removeEventListener("auth-session-changed", changed);
+            window.removeEventListener("storage", storage);
             window.removeEventListener("focus", focus);
+            window.removeEventListener("app-notice", notify);
         };
     }, []);
 
     useEffect(() => {
+        let session;
+        try { session = getLoginSession(); } catch { return; }
+        if (!session) return;
+        const timer = window.setTimeout(() => {
+            if (getLoginSession()?.token === session.token) setLoginSession(null);
+        }, Math.max(0, session.expiresAt - Date.now()));
+        return () => window.clearTimeout(timer);
+    }, [user, refresh]);
+
+    useEffect(() => {
         const controller = new AbortController();
+        const expectedSession = getApiSessionGeneration();
         authController.current = controller;
         lastAuthCheck.current = Date.now();
-        api("/api/auth/me", { signal: controller.signal })
+        api("/api/auth/me", { signal: controller.signal, expectedSession })
             .then((response) => response.json())
             .then((data: { user: User | null; setupRequired: boolean }) => {
                 if (controller.signal.aborted) return;
-                if (currentUser.current?.id !== data.user?.id || currentUser.current?.role !== data.user?.role) {
-                    resetApiSession();
-                    issuesView.current = initialIssuesView;
+                assertApiSession(expectedSession);
+                const stored = getLoginSession();
+                if (stored && !data.user) { setLoginSession(null); return; }
+                if (stored && data.user && JSON.stringify(stored.user) !== JSON.stringify(data.user)) {
+                    setLoginSession({ ...stored, user: data.user });
                 }
-                currentUser.current = data.user;
                 setSetupRequired(data.setupRequired);
-                setUser(current => current?.id === data.user?.id && current?.name === data.user?.name
-                    && current?.username === data.user?.username && current?.role === data.user?.role ? current : data.user);
+                syncUser(data.user);
                 setError("");
             })
             .catch((error) => { if (!controller.signal.aborted) setError(`读取登录状态失败：${String(error)}`); })
@@ -296,6 +160,8 @@ export default function App() {
             });
         return () => controller.abort();
     }, [refresh]);
+
+    useEffect(() => { if (!detail) document.title = "问题管理系统"; }, [pathname]);
 
     return (
         <StrictMode>
@@ -307,11 +173,15 @@ export default function App() {
                 noSsr
             >
                 <CssBaseline enableColorScheme />
+                <GlobalStyles styles={pausedAccount ? { ".MuiModal-root:not(.reauthentication-dialog), .MuiPopper-root": { visibility: "hidden" } } : {}} />
                 {pathname === "/login" && <Box sx={{ position: "absolute", top: 16, right: 16 }}><ThemeToggle /></Box>}
-                <Container component="main" maxWidth="lg" sx={{ py: 4, ...(pathname === "/login" ? { minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" } : {}) }} onClick={(event) => {
+                <Container component="main" maxWidth="lg" inert={pausedAccount !== null} sx={{ py: 4, visibility: pausedAccount ? "hidden" : "visible", ...(pathname === "/login" ? { minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" } : {}) }} onClick={(event) => {
                     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     const link = (event.target as Element).closest("a");
                     if (!link || link.origin !== window.location.origin || link.target || link.hasAttribute("download")) return;
+                    if (link.hash) return;
+                    if (!["/", "/login", "/account", "/notifications", "/operations", "/admin/users", "/admin/users/new"].includes(link.pathname)
+                        && !/^\/issues\/\d+$/.test(link.pathname)) return;
                     event.preventDefault();
                     navigate(link.pathname + link.search + link.hash);
                 }}>
@@ -334,14 +204,18 @@ export default function App() {
                                             <Divider />
                                             <MenuItem component="a" href="/account" onClick={() => setAccountAnchor(null)}>账户设置</MenuItem>
                                             {user.role === "admin" && <MenuItem component="a" href="/admin/users" onClick={() => setAccountAnchor(null)}>用户管理</MenuItem>}
+                                            {user.role === "admin" && <MenuItem component="a" href="/operations" onClick={() => setAccountAnchor(null)}>操作记录</MenuItem>}
                                             <Divider />
                                             <MenuItem disabled={loggingOut} onClick={async () => {
                                                 setAccountAnchor(null);
                                                 setLoggingOut(true);
                                                 try {
-                                                    await api("/api/auth/logout", { method: "POST" });
+                                                    if (!confirmDraftNavigation()) return;
+                                                    assertApiSession(apiSession);
+                                                    discardDraftGuards();
                                                     handleUserChange(null);
-                                                    navigate("/");
+                                                    window.history.replaceState(window.history.state, "", "/login");
+                                                    setPath("/login");
                                                 } catch (error) {
                                                     setError(`退出失败：${String(error)}`);
                                                 } finally {
@@ -360,15 +234,33 @@ export default function App() {
                         </Box>}
                         {loading && <LinearProgress aria-label="读取登录状态" />}
                         {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{error}</Alert>}
-                        {!loading && (user || pathname === "/login") && <Box key={`${user?.id}:${user?.role}:${pathname}`} className="page-content">{pathname === "/" ? <Issues user={user} savedView={issuesView} />
-                            : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={user} replyTarget={replyTarget} />
-                            : pathname === "/notifications" && user ? <Notifications key={user.id} />
-                            : pathname === "/admin/users" && user ? <Users user={user} onUserChange={handleUserChange} />
+                        {!loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={path.split("?")[1] ?? ""} />
+                            : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
+                            : pathname === "/notifications" && pageUser ? <Notifications key={pageUser.id} />
+                            : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
+                            : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
                             : pathname === "/login" || pathname === "/account" || pathname === "/admin/users/new"
-                                ? <AuthPage key={setupRequired ? "setup" : pathname} mode={pathname === "/login" && setupRequired ? "setup" : pathname === "/admin/users/new" ? "create-user" : pathname.slice(1) as "login" | "account"} user={user} onUserChange={handleUserChange} />
+                                ? <AuthPage key={setupRequired ? "setup" : pathname} mode={pathname === "/login" && setupRequired ? "setup" : pathname === "/admin/users/new" ? "create-user" : pathname.slice(1) as "login" | "account"} user={pageUser} onUserChange={handleUserChange} />
                                 : <Stack spacing={2}><Typography>页面不存在。</Typography><Button href="/">返回列表</Button></Stack>}</Box>}
                     </Stack>
                 </Container>
+                <Dialog open={pausedAccount !== null} className="reauthentication-dialog" fullWidth maxWidth="sm" sx={{ zIndex: theme.zIndex.modal + 10 }}>
+                    <DialogTitle>重新登录以恢复草稿</DialogTitle>
+                    <DialogContent>
+                        <Typography sx={{ mb: 2, overflowWrap: "anywhere" }}>登录已失效或账户已切换，@{pausedAccount?.username} 的未提交内容仍保留在当前页面。请重新登录原账户；刷新或关闭页面仍会丢失草稿。</Typography>
+                        {pausedAccount && <AuthPage key={pausedAccount.id} mode="login" user={null} resumeUserId={pausedAccount.id} onUserChange={handleUserChange} />}
+                    </DialogContent>
+                    <DialogActions><Button color="inherit" onClick={() => {
+                        if (!confirmDraftNavigation()) return;
+                        discardDraftGuards();
+                        pausedAccountRef.current = null;
+                        setPausedAccount(null);
+                        setPageVersion(value => value + 1);
+                    }}>放弃草稿</Button></DialogActions>
+                </Dialog>
+                <Snackbar open={notice !== ""} onClose={(_, reason) => { if (reason !== "clickaway") setNotice(""); }}>
+                    <Alert severity="warning" onClose={() => setNotice("")}>{notice}</Alert>
+                </Snackbar>
             </ThemeProvider>
         </StrictMode>
     );
