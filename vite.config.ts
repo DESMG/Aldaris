@@ -15,6 +15,19 @@ export default defineConfig({
     },
     environments: {
         client: {
+            optimizeDeps: {
+                include: [
+                    "react",
+                    "react-dom/client",
+                    "react/jsx-runtime",
+                    "react/jsx-dev-runtime",
+                    "@mui/material",
+                    "@mui/material/Container",
+                    "@mui/material/CssBaseline",
+                    "@mui/material/styles",
+                ],
+                holdUntilCrawlEnd: false,
+            },
             resolve: {
                 conditions: ["mui-modern", "module", "browser", "development|production"],
             },
