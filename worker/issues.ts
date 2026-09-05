@@ -68,7 +68,9 @@ export async function issues(request: Request, env: Env, user: User) {
     const detailMatch = url.pathname.match(/^\/api\/issues\/(\d+)$/);
     if (detailMatch && request.method === "GET") {
         const issue = await env.DB.prepare(`
-                SELECT issues.id, issues.title, issues.description, issues.images,
+                SELECT issues.id, issues.title, issues.description,
+                    (SELECT json_group_array(key) FROM (SELECT key FROM images
+                        WHERE images.issueId = issues.id AND state = 'active' ORDER BY position)) AS images,
                     issues.priority, issues.status, issues.stateReason, issues.createdAt,
                     issues.authorId, issues.assignmentVersion, issues.version,
                     users.name AS authorName,
@@ -98,7 +100,9 @@ export async function issues(request: Request, env: Env, user: User) {
     if (singleReply && request.method === "GET") {
         const reply = await env.DB.prepare(`
             SELECT replies.id, replies.version, replies.authorId, users.name AS authorName,
-                replies.description, replies.images, replies.createdAt
+                replies.description, replies.createdAt,
+                (SELECT json_group_array(key) FROM (SELECT key FROM images
+                    WHERE images.replyId = replies.id AND state = 'active' ORDER BY position)) AS images
             FROM replies JOIN users ON users.id = replies.authorId WHERE replies.id = ?
         `).bind(singleReply[1]).first<ReplyRow>();
         if (!reply) throw new HttpError(404, "该评论已被删除。");
@@ -141,6 +145,7 @@ export async function issues(request: Request, env: Env, user: User) {
         }
 
         const keys: string[] = [];
+        const creationToken = crypto.randomUUID();
         let committed = false;
         let commitAttempted = false;
         try {
@@ -151,12 +156,12 @@ export async function issues(request: Request, env: Env, user: User) {
             }
             const createdAt = new Date().toISOString();
             const statement = replyMatch
-                ? env.DB.prepare(`INSERT INTO replies (issueId, authorId, description, images, createdAt)
+                ? env.DB.prepare(`INSERT INTO replies (issueId, authorId, description, creationToken, createdAt)
                     SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?)`)
-                    .bind(replyMatch[1], user.id, description, JSON.stringify(keys), createdAt, user.id, requestKey)
-                : env.DB.prepare(`INSERT INTO issues (title, description, priority, images, createdAt, authorId)
+                    .bind(replyMatch[1], user.id, description, creationToken, createdAt, user.id, requestKey)
+                : env.DB.prepare(`INSERT INTO issues (title, description, priority, creationToken, createdAt, authorId)
                     SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?)`)
-                    .bind(title, description, "Low", JSON.stringify(keys), createdAt, user.id, user.id, requestKey);
+                    .bind(title, description, "Low", creationToken, createdAt, user.id, user.id, requestKey);
             const mentions = JSON.stringify(mentionUsernames(description));
             const notifications = replyMatch
                 ? env.DB.prepare(`
@@ -165,39 +170,51 @@ export async function issues(request: Request, env: Env, user: User) {
                 FROM users
                 CROSS JOIN replies
                 WHERE changes() > 0
-                AND replies.id = (SELECT MAX(id)
-                FROM replies)
+                AND replies.creationToken = ?
                 AND users.deletedAt IS NULL
                 AND users.id != ?
                 AND users.username IN (SELECT value
                 FROM json_each(?))
             `)
-                    .bind(user.id, createdAt, user.id, mentions)
+                    .bind(user.id, createdAt, creationToken, user.id, mentions)
                 : env.DB.prepare(`
                 INSERT OR IGNORE INTO notifications (userId, actorId, issueId, kind, source, createdAt)
                 SELECT users.id, ?, issues.id, 'mention', 'issue:' || issues.id, ?
                 FROM users
                 CROSS JOIN issues
                 WHERE changes() > 0
-                AND issues.id = (SELECT MAX(id)
-                FROM issues)
+                AND issues.creationToken = ?
                 AND users.deletedAt IS NULL
                 AND users.id != ?
                 AND users.username IN (SELECT value
                 FROM json_each(?))
             `)
-                    .bind(user.id, createdAt, user.id, mentions);
+                    .bind(user.id, createdAt, creationToken, user.id, mentions);
             const remember = env.DB.prepare(`
                 INSERT OR IGNORE INTO mutation_requests (userId, requestKey, route, fingerprint, resourceId, createdAt)
-                VALUES (?, ?, ?, ?, (SELECT MAX(id) FROM ${replyMatch ? "replies" : "issues"}), ?)
-            `).bind(user.id, requestKey, url.pathname, fingerprint, createdAt);
+                SELECT ?, ?, ?, ?, id, ? FROM ${replyMatch ? "replies" : "issues"} WHERE creationToken = ?
+            `).bind(user.id, requestKey, url.pathname, fingerprint, createdAt, creationToken);
             const operation = env.DB.prepare(`
-                INSERT INTO operation_events (actorId, action, details, createdAt)
+                INSERT INTO events (actorId, action, details, createdAt)
                 SELECT ?, ?, json_object('resourceId', resourceId), ? FROM mutation_requests
                 WHERE userId = ? AND requestKey = ? AND changes() > 0 AND ? = 'admin'
             `).bind(user.id, replyMatch ? "reply_created" : "issue_created", createdAt, user.id, requestKey, user.role);
+            const imageRows = JSON.stringify(keys.map((key, index) => ({
+                key, contentType: images[index].contentType, byteSize: images[index].bytes.length,
+            })));
+            const attachImages = env.DB.prepare(replyMatch ? `
+                INSERT INTO images (key, replyId, position, contentType, byteSize, state, createdAt)
+                SELECT json_extract(value, '$.key'), replies.id, key, json_extract(value, '$.contentType'),
+                    json_extract(value, '$.byteSize'), 'active', ?
+                FROM json_each(?) CROSS JOIN replies WHERE replies.creationToken = ?
+            ` : `
+                INSERT INTO images (key, issueId, position, contentType, byteSize, state, createdAt)
+                SELECT json_extract(value, '$.key'), issues.id, key, json_extract(value, '$.contentType'),
+                    json_extract(value, '$.byteSize'), 'active', ?
+                FROM json_each(?) CROSS JOIN issues WHERE issues.creationToken = ?
+            `).bind(createdAt, imageRows, creationToken);
             commitAttempted = true;
-            const [created] = await env.DB.batch([statement, notifications, remember, operation]);
+            const [created] = await env.DB.batch([statement, notifications, remember, operation, attachImages]);
             committed = created.meta.changes > 0;
             if (!created.meta.changes) await rollbackImages(env, keys);
             const saved = await env.DB.prepare("SELECT route, fingerprint, resourceId FROM mutation_requests WHERE userId = ? AND requestKey = ?")
@@ -213,7 +230,12 @@ export async function issues(request: Request, env: Env, user: User) {
 
     const commentMatch = url.pathname.match(/^\/api\/replies\/(\d+)$/);
     if (commentMatch && ["PATCH", "DELETE"].includes(request.method)) {
-        const reply = await env.DB.prepare("SELECT id, issueId, authorId, description, images, version, createdAt FROM replies WHERE id = ?").bind(commentMatch[1]).first<ReplyRow>();
+        const reply = await env.DB.prepare(`
+            SELECT id, issueId, authorId, description, version, createdAt,
+                (SELECT json_group_array(key) FROM (SELECT key FROM images
+                    WHERE replyId = replies.id AND state = 'active' ORDER BY position)) AS images
+            FROM replies WHERE id = ?
+        `).bind(commentMatch[1]).first<ReplyRow>();
         if (!reply) return Response.json({ error: "未找到该评论。" }, { status: 404 });
         if (reply.authorId !== user.id && user.role !== "admin") return Response.json({ error: "只有评论作者或管理员可以编辑和删除评论。" }, { status: 403 });
         if (request.headers.get("If-Match") !== `"${reply.version}"`) {
@@ -222,14 +244,14 @@ export async function issues(request: Request, env: Env, user: User) {
         const oldImages: string[] = JSON.parse(reply.images);
         if (request.method === "DELETE") {
             const event = env.DB.prepare(`
-                INSERT INTO issue_events (issueId, actorId, kind, details, createdAt)
-                SELECT issueId, ?, 'reply_deleted', json_object('replyId', id), ?
+                INSERT INTO events (channel, issueId, actorId, action, details, createdAt)
+                SELECT 'timeline', issueId, ?, 'reply_deleted', json_object('replyId', id), ?
                 FROM replies WHERE id = ? AND version = ?
             `).bind(user.id, new Date().toISOString(), reply.id, reply.version);
             const removeImages = env.DB.prepare(`
-                INSERT OR IGNORE INTO r2_deletions (key)
-                SELECT value FROM json_each(?) WHERE EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
-            `).bind(reply.images, reply.id, reply.version);
+                UPDATE images SET replyId = NULL, position = NULL, state = 'deleting'
+                WHERE replyId = ? AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
+            `).bind(reply.id, reply.id, reply.version);
             const remove = env.DB.prepare("DELETE FROM replies WHERE id = ? AND version = ?").bind(reply.id, reply.version);
             const operation = recordOperation(env.DB, user, "reply_deleted", { replyId: reply.id, issueId: reply.issueId });
             const [_eventResult, _imageResult, result] = await env.DB.batch([event, removeImages, remove, operation]);
@@ -252,8 +274,8 @@ export async function issues(request: Request, env: Env, user: User) {
             }
             const removed = oldImages.filter(key => !retained.includes(key));
             const recordEdit = env.DB.prepare(`
-                INSERT INTO issue_events (issueId, actorId, kind, details, createdAt)
-                SELECT issueId, ?, 'reply_edited', json_object('replyId', id), ?
+                INSERT INTO events (channel, issueId, actorId, action, details, createdAt)
+                SELECT 'timeline', issueId, ?, 'reply_edited', json_object('replyId', id), ?
                 FROM replies
                 WHERE id = ?
                 AND version = ?
@@ -272,17 +294,36 @@ export async function issues(request: Request, env: Env, user: User) {
             `)
                     .bind(user.id, new Date().toISOString(), reply.id, reply.version, user.id, JSON.stringify(mentionUsernames(description)));
             const queueRemovedImages = env.DB.prepare(`
-                INSERT OR IGNORE INTO r2_deletions (key)
-                SELECT value FROM json_each(?)
-                WHERE EXISTS (
-                    SELECT 1 FROM replies WHERE id = ? AND version = ?
-                )
-            `).bind(JSON.stringify(removed), reply.id, reply.version);
-            const updateReply = env.DB.prepare("UPDATE replies SET description = ?, images = ?, version = version + 1 WHERE id = ? AND version = ?")
-                    .bind(description, JSON.stringify([...retained, ...uploaded]), reply.id, reply.version);
+                UPDATE images SET replyId = NULL, position = NULL, state = 'deleting'
+                WHERE key IN (SELECT value FROM json_each(?)) AND replyId = ?
+                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
+            `).bind(JSON.stringify(removed), reply.id, reply.id, reply.version);
+            const detachRetained = env.DB.prepare(`
+                UPDATE images SET replyId = NULL, position = NULL, state = 'deleting'
+                WHERE replyId = ? AND key IN (SELECT value FROM json_each(?))
+                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
+            `).bind(reply.id, JSON.stringify(retained), reply.id, reply.version);
+            const attachRetained = env.DB.prepare(`
+                UPDATE images SET replyId = ?, position = (SELECT key FROM json_each(?) WHERE value = images.key), state = 'active'
+                WHERE key IN (SELECT value FROM json_each(?)) AND state = 'deleting'
+                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
+            `).bind(reply.id, JSON.stringify(retained), JSON.stringify(retained), reply.id, reply.version);
+            const imageRows = JSON.stringify(uploaded.map((key, index) => ({
+                key, contentType: files[index].contentType, byteSize: files[index].bytes.length,
+            })));
+            const attachUploaded = env.DB.prepare(`
+                INSERT INTO images (key, replyId, position, contentType, byteSize, state, createdAt)
+                SELECT json_extract(value, '$.key'), ?, ? + key, json_extract(value, '$.contentType'),
+                    json_extract(value, '$.byteSize'), 'active', ?
+                FROM json_each(?) WHERE EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
+            `).bind(reply.id, retained.length, new Date().toISOString(), imageRows, reply.id, reply.version);
+            const updateReply = env.DB.prepare("UPDATE replies SET description = ?, version = version + 1 WHERE id = ? AND version = ?")
+                    .bind(description, reply.id, reply.version);
             const operation = recordOperation(env.DB, user, "reply_edited", { replyId: reply.id, issueId: reply.issueId });
             commitAttempted = true;
-            const [_editEvent, _mentionResult, _imageResult, result] = await env.DB.batch([recordEdit, notifyMentions, queueRemovedImages, updateReply, operation]);
+            const [_editEvent, _mentionResult, _imageResult, _detachResult, _retainedResult, _uploadedResult, result] = await env.DB.batch([
+                recordEdit, notifyMentions, queueRemovedImages, detachRetained, attachRetained, attachUploaded, updateReply, operation,
+            ]);
             if (!result.meta.changes) {
                 await rollbackImages(env, uploaded);
                 return Response.json({ error: "评论已被修改，请刷新后重试。" }, { status: 409 });
@@ -313,8 +354,8 @@ export async function issues(request: Request, env: Env, user: User) {
         const memberCount = assignees.length;
         const membersAreActive = `(${eligibleMembers}) = ?`;
         const recordAssignment = env.DB.prepare(`
-                INSERT INTO issue_events (issueId, actorId, kind, details, createdAt)
-                SELECT id, ?, 'assignment', json_object('before', json((SELECT json_group_array(json_object('userId', userId, 'role', role, 'name', (SELECT name
+                INSERT INTO events (channel, issueId, actorId, action, details, createdAt)
+                SELECT 'timeline', id, ?, 'issue_assignees', json_object('before', json((SELECT json_group_array(json_object('userId', userId, 'role', role, 'name', (SELECT name
                 FROM users
                 WHERE id = userId)))
                 FROM issue_assignees
@@ -422,13 +463,13 @@ export async function issues(request: Request, env: Env, user: User) {
         const createdAt = new Date().toISOString();
         const recordChange = field === "status"
             ? env.DB.prepare(`
-                INSERT INTO issue_events (issueId, actorId, kind, details, createdAt)
-                SELECT id, ?, 'status', json_object('before', status, 'after', ?, 'stateReason', ?), ?
+                INSERT INTO events (channel, issueId, actorId, action, details, createdAt)
+                SELECT 'timeline', id, ?, 'issue_status', json_object('before', status, 'after', ?, 'stateReason', ?), ?
                 FROM issues WHERE id = ? AND version = ? AND (status != ? OR stateReason IS NOT ?)
             `).bind(user.id, value, stateReason, createdAt, issueMatch[1], issue.version, value, stateReason)
             : env.DB.prepare(`
-                INSERT INTO issue_events (issueId, actorId, kind, details, createdAt)
-                SELECT id, ?, 'priority', json_object('before', priority, 'after', ?), ?
+                INSERT INTO events (channel, issueId, actorId, action, details, createdAt)
+                SELECT 'timeline', id, ?, 'issue_priority', json_object('before', priority, 'after', ?), ?
                 FROM issues WHERE id = ? AND version = ? AND priority != ?
             `).bind(user.id, value, createdAt, issueMatch[1], issue.version, value);
         const update = field === "status"

@@ -44,7 +44,7 @@ export async function auth(request: Request, env: Env, user: User | null) {
             RETURNING id
         `).bind(name, username, digest, salt, createdAt);
         const audit = env.DB.prepare(`
-            INSERT INTO operation_events (actorId, targetId, action, details, createdAt)
+            INSERT INTO events (actorId, targetId, action, details, createdAt)
             SELECT id, id, 'setup', json_object('username', username), ? FROM users WHERE changes() > 0
         `).bind(createdAt);
         const [created] = await env.DB.batch([create, audit]);
@@ -58,16 +58,16 @@ export async function auth(request: Request, env: Env, user: User | null) {
     if (!USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请输入有效用户名和 6–128 个字符的密码。");
     const now = Date.now();
     const accountKey = hash(`username:${username}`);
-    const removeExpired = env.DB.prepare("DELETE FROM auth_account_attempts WHERE attemptedAt <= ?").bind(now - LOGIN_WINDOW_MS);
+    const removeExpired = env.DB.prepare("DELETE FROM auth_attempts WHERE scope = 'account' AND attemptedAt <= ?").bind(now - LOGIN_WINDOW_MS);
     const reserveAttempt = env.DB.prepare(`
-        INSERT INTO auth_account_attempts (id, accountKey, attemptedAt)
-        SELECT ?, ?, ? WHERE (
-            SELECT COUNT(*) FROM auth_account_attempts WHERE accountKey = ? AND attemptedAt > ?
+        INSERT INTO auth_attempts (id, scope, subjectHash, attemptedAt)
+        SELECT ?, 'account', ?, ? WHERE (
+            SELECT COUNT(*) FROM auth_attempts WHERE scope = 'account' AND subjectHash = ? AND attemptedAt > ?
         ) < ?
     `).bind(crypto.randomUUID(), accountKey, now, accountKey, now - LOGIN_WINDOW_MS, LOGIN_ATTEMPT_LIMIT);
     const earliestAttempt = env.DB.prepare(`
-        SELECT MIN(attemptedAt) AS firstAttempt FROM auth_account_attempts
-        WHERE accountKey = ? AND attemptedAt > ?
+        SELECT MIN(attemptedAt) AS firstAttempt FROM auth_attempts
+        WHERE scope = 'account' AND subjectHash = ? AND attemptedAt > ?
     `).bind(accountKey, now - LOGIN_WINDOW_MS);
     const [_removed, reserved, earliest] = await env.DB.batch([removeExpired, reserveAttempt, earliestAttempt]);
     if (!reserved.meta.changes) {
@@ -80,10 +80,10 @@ export async function auth(request: Request, env: Env, user: User | null) {
     if (ip) {
         const window = Math.floor(now / 900000);
         const key = hash(`ip:${ip}:${window}`);
-        await env.DB.prepare("DELETE FROM auth_attempts WHERE expiresAt <= ?").bind(now).run();
+        await env.DB.prepare("DELETE FROM auth_attempts WHERE scope = 'network' AND expiresAt <= ?").bind(now).run();
         const attempt = await env.DB.prepare(`
-            INSERT INTO auth_attempts (key, attempts, expiresAt) VALUES (?, 1, ?)
-            ON CONFLICT(key) DO UPDATE SET attempts = attempts + 1 RETURNING attempts
+            INSERT INTO auth_attempts (id, scope, attempts, expiresAt) VALUES (?, 'network', 1, ?)
+            ON CONFLICT(id) DO UPDATE SET attempts = attempts + 1 RETURNING attempts
         `).bind(key, (window + 1) * 900000).first<{ attempts: number }>();
         if (attempt!.attempts > 100) throw new HttpError(429, "当前网络尝试次数过多，请稍后重试。", { "Retry-After": String(Math.ceil(((window + 1) * 900000 - now) / 1000)) });
     }

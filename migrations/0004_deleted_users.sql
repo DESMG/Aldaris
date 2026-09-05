@@ -1,3 +1,0 @@
-ALTER TABLE users ADD COLUMN deletedAt TEXT;
-
-CREATE TABLE r2_deletions (key TEXT PRIMARY KEY);

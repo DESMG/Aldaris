@@ -13,14 +13,22 @@ type Row = {
 const source = `
     WITH timeline AS (
         SELECT id, 'reply' AS kind, authorId AS actorId, createdAt FROM replies WHERE issueId = ?
-        UNION ALL SELECT id, kind, actorId, createdAt FROM issue_events WHERE issueId = ?
+        UNION ALL SELECT id, CASE action
+            WHEN 'issue_status' THEN 'status'
+            WHEN 'issue_priority' THEN 'priority'
+            WHEN 'issue_assignees' THEN 'assignment'
+            ELSE action END AS kind, actorId, createdAt
+        FROM events WHERE channel = 'timeline' AND issueId = ?
     )`;
 const select = `
     SELECT t.id, t.kind, t.actorId, t.createdAt, users.name AS actorName,
-        replies.description, replies.images, replies.version, issue_events.details
+        replies.description,
+        (SELECT json_group_array(key) FROM (SELECT key FROM images
+            WHERE replyId = replies.id AND state = 'active' ORDER BY position)) AS images,
+        replies.version, events.details
     FROM timeline t LEFT JOIN users ON users.id = t.actorId
     LEFT JOIN replies ON t.kind = 'reply' AND replies.id = t.id
-    LEFT JOIN issue_events ON t.kind != 'reply' AND issue_events.id = t.id
+    LEFT JOIN events ON t.kind != 'reply' AND events.id = t.id
 `;
 
 function entry(row: Row): TimelineEntry {

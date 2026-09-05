@@ -12,10 +12,10 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
         const before = Number(url.searchParams.get("before") ?? Number.MAX_SAFE_INTEGER);
         if (!Number.isSafeInteger(before) || before < 1) throw new HttpError(400, "读取操作记录：游标无效。");
         const rows = await env.DB.prepare(`
-            SELECT operation_events.id, operation_events.actorId, users.name AS actorName,
-                operation_events.targetId, action, details, operation_events.createdAt
-            FROM operation_events JOIN users ON users.id = actorId
-            WHERE operation_events.id < ? ORDER BY operation_events.id DESC LIMIT 51
+            SELECT events.id, events.actorId, users.name AS actorName,
+                events.targetId, action, details, events.createdAt
+            FROM events JOIN users ON users.id = actorId
+            WHERE events.channel = 'operation' AND events.id < ? ORDER BY events.id DESC LIMIT 51
         `).bind(before).all<Omit<OperationEvent, "details"> & { details: string }>();
         const events = rows.results.slice(0, 50).map(row => ({ ...row, details: JSON.parse(row.details) }));
         return Response.json({ events, next: rows.results.length > 50 ? events.at(-1)!.id : null });
@@ -47,7 +47,7 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
             RETURNING id, name, username, role, profileVersion AS version
         `).bind(name, username, digest, salt, role, createdAt, admin.id);
         const audit = env.DB.prepare(`
-            INSERT INTO operation_events (actorId, targetId, action, details, createdAt)
+            INSERT INTO events (actorId, targetId, action, details, createdAt)
             SELECT ?, id, 'user_created', json_object('username', username, 'name', name, 'role', role), ?
             FROM users WHERE id = last_insert_rowid() AND changes() > 0
         `).bind(admin.id, createdAt);
@@ -77,8 +77,8 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
                 AND (target.role != 'admin' OR (SELECT COUNT(*) FROM users WHERE role = 'admin' AND deletedAt IS NULL) > 1)
         )`;
         const recordAssignments = env.DB.prepare(`
-            INSERT INTO issue_events (issueId, actorId, kind, details, createdAt)
-            SELECT issues.id, ?, 'assignment',
+            INSERT INTO events (channel, issueId, actorId, action, details, createdAt)
+            SELECT 'timeline', issues.id, ?, 'issue_assignees',
                 json_object('before', json((SELECT json_group_array(json_object('userId', a.userId, 'role', a.role, 'name', members.name))
                     FROM issue_assignees a JOIN users members ON members.id = a.userId WHERE a.issueId = issues.id)),
                     'after', json((SELECT json_group_array(json_object('userId', a.userId, 'role', a.role, 'name', members.name))
@@ -96,7 +96,7 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
             WHERE id = ? AND ${deleteAllowed}
         `).bind(`deleted:${target.id}`, deletedAt, target.id, admin.id, target.id, target.version);
         const audit = env.DB.prepare(`
-            INSERT INTO operation_events (actorId, targetId, action, details, createdAt)
+            INSERT INTO events (actorId, targetId, action, details, createdAt)
             SELECT ?, ?, 'user_deleted', ?, ? WHERE changes() > 0
         `).bind(admin.id, target.id, JSON.stringify({ username: target.username, name: target.name }), deletedAt);
         const [_events, _versions, _assignments, removed] = await env.DB.batch([recordAssignments, bumpAssignments, removeAssignments, removeUser, audit]);
@@ -120,7 +120,7 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
     `).bind(name, username, replacement?.digest ?? null, replacement?.salt ?? null,
         password || username !== target.username ? 1 : 0, target.id, target.version, target.credentialVersion, admin.id, username, target.id);
     const audit = env.DB.prepare(`
-        INSERT INTO operation_events (actorId, targetId, action, details, createdAt)
+        INSERT INTO events (actorId, targetId, action, details, createdAt)
         SELECT ?, ?, ?, ?, ? WHERE changes() > 0
     `).bind(admin.id, target.id, password ? "password_reset" : "user_updated",
         JSON.stringify({ previousName: target.name, name, previousUsername: target.username, username, passwordChanged: !!password }), new Date().toISOString());
