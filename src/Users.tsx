@@ -26,10 +26,12 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     const [deleteConflict, setDeleteConflict] = useState(false);
     const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
     const [error, setError] = useState("");
+    const [listError, setListError] = useState("");
     const [saving, setSaving] = useState(false);
     const [loading, setLoading] = useState(!cached);
     const [refresh, setRefresh] = useState(0);
     const lastRefresh = useRef(refresh);
+    const listEnd = useRef<HTMLDivElement>(null);
     const dirty = editOpen && editing !== null && (conflict || editName !== editing.name || editUsername !== editing.username || password !== "" || confirmPassword !== "");
     const clearGuard = useDraftGuard(dirty);
 
@@ -46,19 +48,33 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
         lastRefresh.current = refresh;
         const url = after ? `/api/admin/users?after=${after}` : "/api/admin/users";
         setLoading(force || !getCachedJson(url));
-        setError("");
+        setListError("");
         cachedJson<{ users: ManagedUser[]; next: number | null }>(url, { refresh: force }).then(data => {
             if (!controller.signal.aborted) {
                 setUsers(current => after ? [...current.filter(account => account.id <= after), ...data.users] : data.users);
                 setNext(data.next);
             }
         }).catch(error => {
-            if (!controller.signal.aborted) setError(`读取用户失败：${String(error)}`);
+            if (!controller.signal.aborted) setListError(`读取用户失败：${String(error)}`);
         }).finally(() => {
             if (!controller.signal.aborted) setLoading(false);
         });
         return () => controller.abort();
     }, [refresh, user.role, after]);
+
+    useEffect(() => {
+        if (user.role !== "admin" || next === null || loading || saving || listError || editing !== null || deleting !== null) return;
+        let active = true;
+        const observer = new IntersectionObserver(entries => {
+            if (active && entries.some(entry => entry.isIntersecting)) {
+                active = false;
+                observer.disconnect();
+                setAfter(next);
+            }
+        });
+        observer.observe(listEnd.current!);
+        return () => { active = false; observer.disconnect(); };
+    }, [next, loading, saving, listError, editing, deleting, user.role]);
 
     if (user.role !== "admin") return <Alert severity="error">只有管理员可以管理用户。</Alert>;
 
@@ -68,8 +84,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
             <Button href="/admin/users/new" variant="contained">创建用户</Button>
         </Stack>
         <Typography component="h1" variant="h5">用户管理</Typography>
-        {error && !editing && !deleting && <Alert severity="error" action={<Button color="inherit" disabled={loading} onClick={() => setRefresh(value => value + 1)}>重试</Button>}>{error}</Alert>}
-        {loading && <Typography>正在读取用户…</Typography>}
+        {loading && users.length === 0 && <Typography role="status">正在读取用户…</Typography>}
         <Dialog open={editOpen} onClose={closeEditor} fullWidth maxWidth="xs" aria-labelledby="edit-user-title" transitionDuration={reducedMotion ? 0 : 440} slotProps={{ transition: { onExited: () => { setEditing(null); setPassword(""); setConfirmPassword(""); } }, paper: { sx: { p: { xs: 3, sm: 4 }, maxWidth: 440 } } }}>
         {editing &&
             <Box component="form" key={editing.id} onSubmit={async event => {
@@ -146,7 +161,9 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                 <Button variant="text" color="error" disabled={saving || loading || account.id === user.id} onClick={() => { setError(""); setDeleteConflict(false); setDeleting(account); }}>删除</Button>
             </Stack>
         </Paper>)}
-        {next !== null && <Button disabled={saving || loading} onClick={() => setAfter(next)}>加载更多用户</Button>}
+        {listError && !editing && !deleting && <Alert severity="error" action={<Button color="inherit" disabled={loading} onClick={() => setRefresh(value => value + 1)}>重试</Button>}>{listError}</Alert>}
+        {loading && users.length > 0 && <Typography role="status">正在读取用户…</Typography>}
+        {next !== null && <Box ref={listEnd} aria-hidden="true" sx={{ height: 1 }} />}
         <Dialog open={deleting !== null} onClose={() => { if (!saving) setDeleting(null); }} fullWidth maxWidth="xs" aria-labelledby="delete-user-title" aria-describedby="delete-user-description">
             <DialogTitle id="delete-user-title">删除用户</DialogTitle>
             <DialogContent>

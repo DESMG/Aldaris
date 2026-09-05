@@ -23,12 +23,13 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
     if (url.pathname === "/api/admin/users" && request.method === "GET") {
         const after = Number(url.searchParams.get("after") ?? "0");
         if (!Number.isSafeInteger(after) || after < 0) throw new HttpError(400, "读取用户：游标无效。");
+        const limit = 10;
         const rows = await env.DB.prepare(`
             SELECT id, name, username, role, profileVersion AS version FROM users
-            WHERE deletedAt IS NULL AND id > ? ORDER BY id LIMIT 21
-        `).bind(after).all<ManagedUser>();
-        const users = rows.results.slice(0, 20);
-        return Response.json({ users, next: rows.results.length > 20 ? users.at(-1)!.id : null });
+            WHERE deletedAt IS NULL AND id > ? ORDER BY id LIMIT ?
+        `).bind(after, limit + 1).all<ManagedUser>();
+        const users = rows.results.slice(0, limit);
+        return Response.json({ users, next: rows.results.length > limit ? users.at(-1)!.id : null });
     }
     if (url.pathname === "/api/admin/users" && request.method === "POST") {
         const form = await readForm(request, 8192);
