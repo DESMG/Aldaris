@@ -4,6 +4,10 @@ export type User = { id: number; name: string; username: string; role: "user" | 
 export type ManagedUser = User & { version: number };
 export type Member = Pick<User, "id" | "name" | "username">;
 export type Assignee = Member & { role: AssignmentRole };
+export type Mention = {
+    index: number; username: string; userId: number; name: string;
+    currentUsername: string; role: User['role']; deletedAt: string | null;
+};
 export type IssueSummary = {
     id: number;
     title: string;
@@ -16,11 +20,11 @@ export type IssueSummary = {
 };
 export type Issue = Omit<IssueSummary, "assignees"> & {
     authorId: number | null; assignees: Assignee[];
-    description: string; images: string[]; assignmentVersion: number; version: number;
+    description: string; images: string[]; clearedImages: string[]; mentions: Mention[]; assignmentVersion: number; version: number;
 };
 export type Reply = {
     id: number; version: number; authorId: number; authorName: string;
-    description: string; images: string[]; createdAt: string;
+    description: string; images: string[]; clearedImages: string[]; mentions: Mention[]; createdAt: string;
 };
 type Event = { id: number; actorName: string | null; createdAt: string };
 type AssignmentSnapshot = { userId: number; role: AssignmentRole; name: string };

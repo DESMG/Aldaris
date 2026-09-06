@@ -1,5 +1,5 @@
 import type { ManagedUser, OperationEvent, User } from "../shared/types";
-import { NAME_MAX_LENGTH, USERNAME_PATTERN } from "../shared/limits";
+import { NAME_MAX_LENGTH, NAME_PATTERN, USERNAME_MAX_LENGTH, USERNAME_PATTERN } from "../shared/limits";
 import type { Env } from "./env";
 import { HttpError, readForm } from "./input";
 import { newPassword, passwordValid } from "./password";
@@ -34,10 +34,10 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
     if (url.pathname === "/api/admin/users" && request.method === "POST") {
         const form = await readForm(request, 8192);
         const name = String(form.get("name") ?? "").trim();
-        const username = String(form.get("username") ?? "").trim().toLowerCase();
+        const username = String(form.get("username") ?? "").trim().replace(/[A-Z]/g, letter => letter.toLowerCase());
         const password = String(form.get("password") ?? "");
         const role = String(form.get("role") ?? "user");
-        if (!name || name.length > NAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || !passwordValid(password) || !["admin", "user"].includes(role)) throw new HttpError(400, "创建用户：请检查昵称、用户名、角色和密码长度。");
+        if (!NAME_PATTERN.test(name) || Array.from(name).length > NAME_MAX_LENGTH || username.length > USERNAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || !passwordValid(password) || !["admin", "user"].includes(role)) throw new HttpError(400, "创建用户：请检查昵称、用户名、角色和密码长度。");
         const { salt, digest } = newPassword(password);
         const createdAt = new Date().toISOString();
         const create = env.DB.prepare(`
@@ -106,9 +106,9 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
     }
     const form = await readForm(request, 8192);
     const name = String(form.get("name") ?? "").trim();
-    const username = String(form.get("username") ?? "").trim().toLowerCase();
+    const username = String(form.get("username") ?? "").trim().replace(/[A-Z]/g, letter => letter.toLowerCase());
     const password = String(form.get("password") ?? "");
-    if (!name || name.length > NAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || (password && !passwordValid(password))) throw new HttpError(400, "编辑用户：请检查昵称、用户名和密码长度。");
+    if (!NAME_PATTERN.test(name) || Array.from(name).length > NAME_MAX_LENGTH || username.length > USERNAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || (password && !passwordValid(password))) throw new HttpError(400, "编辑用户：请检查昵称、用户名和密码长度。");
     const replacement = password ? newPassword(password) : null;
     const changed = env.DB.prepare(`
         UPDATE users SET name = ?, username = ?,

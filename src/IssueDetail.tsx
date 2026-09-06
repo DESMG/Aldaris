@@ -135,7 +135,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                     <Card variant="outlined" sx={{ boxShadow: "none", borderRadius: 1 }}>
                         <CardHeader avatar={<Avatar>{(issue.authorName ?? "匿").slice(0, 1)}</Avatar>} title={issue.authorName ?? "匿名"} subheader={new Date(issue.createdAt).toLocaleString("sv-SE")} sx={{ bgcolor: "var(--surface-muted)" }} />
                         <Divider />
-                        <CardContent><Content description={issue.description} images={issue.images} /></CardContent>
+                        <CardContent><Content description={issue.description} images={issue.images} clearedImages={issue.clearedImages} mentions={issue.mentions} /></CardContent>
                     </Card>
 
                     {replies.map((reply, index) => <Fragment key={reply.kind + reply.id}>
@@ -188,7 +188,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                     setEditing(null);
                                     setRefresh(value => value + 1);
                                 } finally { setSaving(false); }
-                            }} /> : <Content description={reply.description} images={reply.images} />}
+                            }} /> : <Content description={reply.description} images={reply.images} clearedImages={reply.clearedImages} mentions={reply.mentions} />}
                             {(user?.id === reply.authorId || user?.role === "admin") && editing !== reply.id && <Stack direction="row" spacing={1}>
                                 <Button variant="text" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
                                     setEditing(reply.id);
@@ -203,7 +203,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                             </Stack>}
                         </Stack>
                     </CardContent></Card>}</Fragment>)}
-                    {user ? <ReplyForm saving={saving} blocked={loading || detailLoading || !!loadError || !!detailError} editing={editing !== null} onStatus={async (status, reason, replied) => {
+                    {user ? <ReplyForm issueId={id} saving={saving} blocked={loading || detailLoading || !!loadError || !!detailError} editing={editing !== null} onStatus={async (status, reason, replied) => {
                         if (!canEdit) return;
                         const changed = await updateIssue("status", status, reason);
                         if (!changed && replied) setError("回复已发表，但工单状态更新失败。请核对最新属性后重试状态操作，无需重复发表回复。");
@@ -219,7 +219,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                             const response = await api(`/api/issues/${id}/replies`, { method: "POST", headers: { "Idempotency-Key": key }, body, expectedSession: apiSession });
                             const created: { id: number } = await response.json();
                             assertApiSession(apiSession);
-                            if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return false;
+                            if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return true;
                             setTarget(String(created.id));
                             window.history.replaceState(window.history.state, "", `/issues/${id}?reply=${created.id}`);
                             const replyUrl = window.location.href;
@@ -329,7 +329,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                 }}>{deleteLoading ? "载入中…" : "载入最新评论"}</Button>}>评论已被修改，请载入最新内容，核对后再次确认删除。</Alert>}
                 {deletePreview && <Stack spacing={2} sx={{ mt: 2 }}>
                     <Typography variant="subtitle2">当前待删除版本 {deletePreview.version}，请核对内容与图片。</Typography>
-                    <Content description={deletePreview.description} images={deletePreview.images} />
+                    <Content description={deletePreview.description} images={deletePreview.images} clearedImages={deletePreview.clearedImages} mentions={deletePreview.mentions} />
                 </Stack>}
             </DialogContent>
             <DialogActions>

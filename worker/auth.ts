@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { hash, passwordHash, newPassword, passwordValid } from "./password";
 import { Buffer } from "node:buffer";
 import type { User } from "../shared/types";
-import { LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_MS, NAME_MAX_LENGTH, USERNAME_PATTERN } from "../shared/limits";
+import { LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_MS, NAME_MAX_LENGTH, NAME_PATTERN, USERNAME_MAX_LENGTH, USERNAME_PATTERN } from "../shared/limits";
 import type { Env } from "./env";
 import { currentUser, issueToken } from "./jwt";
 import { HttpError, readForm } from "./input";
@@ -32,9 +32,9 @@ export async function auth(request: Request, env: Env, user: User | null) {
         const provided = String(form.get("setupCredential") ?? "");
         if (!provided || !timingSafeEqual(Buffer.from(hash(provided)), Buffer.from(hash(credential)))) throw new HttpError(403, "初始化凭据不正确。");
         const name = String(form.get("name") ?? "").trim();
-        const username = String(form.get("username") ?? "").trim().toLowerCase();
+        const username = String(form.get("username") ?? "").trim().replace(/[A-Z]/g, letter => letter.toLowerCase());
         const password = String(form.get("password") ?? "");
-        if (!name || name.length > NAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请检查昵称、用户名和密码长度。");
+        if (!NAME_PATTERN.test(name) || Array.from(name).length > NAME_MAX_LENGTH || username.length > USERNAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请检查昵称、用户名和密码长度。");
         if (password !== form.get("confirmPassword")) throw new HttpError(400, "两次输入的密码不一致。");
         const { salt, digest } = newPassword(password);
         const createdAt = new Date().toISOString();
@@ -53,9 +53,9 @@ export async function auth(request: Request, env: Env, user: User | null) {
     }
 
     const form = await readForm(request, 8192);
-    const username = path === "/api/auth/password" ? user!.username : String(form.get("username") ?? "").trim().toLowerCase();
+    const username = path === "/api/auth/password" ? user!.username : String(form.get("username") ?? "").trim().replace(/[A-Z]/g, letter => letter.toLowerCase());
     const password = String(form.get("password") ?? "");
-    if (!USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请输入有效用户名和 6–128 个字符的密码。");
+    if (username.length > USERNAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请输入有效用户名和 6–128 个字符的密码。");
     const now = Date.now();
     const accountKey = hash(`username:${username}`);
     const removeExpired = env.DB.prepare("DELETE FROM auth_attempts WHERE scope = 'account' AND attemptedAt <= ?").bind(now - LOGIN_WINDOW_MS);

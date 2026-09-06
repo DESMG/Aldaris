@@ -5,6 +5,7 @@ import { cachedJson, getCachedJson } from "./api";
 import type { Member } from "./api";
 import ImageSelection from "./ImageSelection";
 import { DESCRIPTION_MAX_LENGTH } from "../shared/limits";
+import { textLinks } from "../shared/links";
 
 export default function Description({ label, value, onChange, images, onImagesChange, disabled, retainedCount, onProcessingChange }: {
     label: string;
@@ -23,11 +24,14 @@ export default function Description({ label, value, onChange, images, onImagesCh
     const [focused, setFocused] = useState(false);
     const [dismissed, setDismissed] = useState(false);
     const [users, setUsers] = useState<Member[]>([]);
+    const [selectedIndex, setSelectedIndex] = useState(0);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const [pastedFiles, setPastedFiles] = useState<File[] | null>(null);
-    const mention = value.slice(0, cursor).match(/(?<![\p{L}\p{N}_@.+-])@([a-z0-9_.-]{1,50})$/iu);
-    const search = focused && !disabled && !dismissed && mention ? mention[1] : null;
+    const mention = value.slice(0, cursor).match(/(?<![A-Za-z0-9_@.+-])@([A-Za-z][A-Za-z0-9]{0,31})$/u);
+    const inLink = mention && textLinks(value).some(link => mention.index! >= link.index && mention.index! < link.index + link.text.length);
+    const atUsernameEnd = !/[A-Za-z0-9]/u.test(value[cursor] ?? "");
+    const search = focused && !disabled && !dismissed && mention && !inLink && atUsernameEnd ? mention[1] : null;
     useLayoutEffect(() => {
         const textarea = input.current;
         if (search === null || !textarea) {
@@ -80,6 +84,7 @@ export default function Description({ label, value, onChange, images, onImagesCh
         };
     }, [value, cursor, search]);
     useEffect(() => {
+        setSelectedIndex(0);
         if (search === null) return;
         setError("");
         const url = `/api/users/mentions?search=${encodeURIComponent(search)}`;
@@ -100,14 +105,40 @@ export default function Description({ label, value, onChange, images, onImagesCh
         }, 200);
         return () => { active = false; window.clearTimeout(timer); };
     }, [search]);
-    return <Stack spacing={2} onKeyDown={event => {
-        if (event.key !== "Escape" || search === null || anchor === null) return;
-        event.preventDefault();
-        event.stopPropagation();
+    function chooseUser(user: Member) {
+        if (disabled || search === null) return;
+        const start = cursor - search.length - 1;
+        const inserted = `@${user.username} `;
+        const next = value.slice(0, start) + inserted + value.slice(cursor);
+        if (next.length > DESCRIPTION_MAX_LENGTH) { setError(`内容最多 ${DESCRIPTION_MAX_LENGTH} 个字符。`); return; }
+        onChange(next);
+        setCursor(start + inserted.length);
         setDismissed(true);
-        input.current?.focus();
+        requestAnimationFrame(() => {
+            input.current?.focus();
+            input.current?.setSelectionRange(start + inserted.length, start + inserted.length);
+        });
+    }
+    return <Stack spacing={2} onKeyDown={event => {
+        if (event.target !== input.current && !popup.current?.contains(event.target as Node)) return;
+        if (event.nativeEvent.isComposing || event.which === 229 || disabled || search === null || anchor === null) return;
+        if (event.key === "Escape") {
+            event.preventDefault();
+            event.stopPropagation();
+            setDismissed(true);
+            input.current?.focus();
+        } else if (!loading && users.length > 0 && ["ArrowDown", "ArrowUp"].includes(event.key)) {
+            event.preventDefault();
+            const next = (selectedIndex + (event.key === "ArrowDown" ? 1 : -1) + users.length) % users.length;
+            setSelectedIndex(next);
+            popup.current?.querySelectorAll("button")[next]?.scrollIntoView({ block: "nearest" });
+            input.current?.focus();
+        } else if (!loading && users[selectedIndex] && event.key === "Enter") {
+            event.preventDefault();
+            chooseUser(users[selectedIndex]);
+        }
     }} onBlur={event => {
-        if (!event.currentTarget.contains(event.relatedTarget) && !popup.current?.contains(event.relatedTarget)) setFocused(false);
+        if (event.relatedTarget !== input.current && !popup.current?.contains(event.relatedTarget)) setFocused(false);
     }}>
         <TextField
             label={label} multiline minRows={4} fullWidth disabled={disabled}
@@ -132,19 +163,12 @@ export default function Description({ label, value, onChange, images, onImagesCh
                 {error && <Alert severity="error">{error}</Alert>}
                 {loading && <Typography variant="body2">正在查找用户…</Typography>}
                 {!loading && !error && users.length === 0 && <Typography variant="body2">没有匹配的用户。</Typography>}
-                {users.map(user => <Button key={user.id} variant="text" fullWidth sx={{ justifyContent: "flex-start" }}
-                    onMouseDown={event => event.preventDefault()} onClick={() => {
-                        const start = cursor - search.length - 1;
-                        const inserted = `@${user.username} `;
-                        const next = value.slice(0, start) + inserted + value.slice(cursor);
-                        if (next.length > DESCRIPTION_MAX_LENGTH) { setError(`内容最多 ${DESCRIPTION_MAX_LENGTH} 个字符。`); return; }
-                        onChange(next);
-                        setCursor(start + inserted.length);
-                        requestAnimationFrame(() => {
-                            input.current?.focus();
-                            input.current?.setSelectionRange(start + inserted.length, start + inserted.length);
-                        });
-                    }}>@{user.username}</Button>)}
+                {users.map((user, index) => <Button key={user.id} variant="text" fullWidth
+                    sx={{ justifyContent: "flex-start", bgcolor: selectedIndex === index ? "action.selected" : undefined }}
+                    onFocus={() => setSelectedIndex(index)}
+                    onMouseDown={event => event.preventDefault()} onClick={() => chooseUser(user)}>
+                    {user.name} (@{user.username})
+                </Button>)}
             </Paper>
         </Popper>}
         <ImageSelection images={images} onChange={onImagesChange} disabled={disabled} retainedCount={retainedCount} onProcessingChange={onProcessingChange} pastedFiles={pastedFiles} />

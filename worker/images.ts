@@ -1,7 +1,48 @@
 import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT } from "../shared/limits.ts";
 import { HttpError } from "../shared/http-error.ts";
 import { inspectImage } from "../shared/image-format.ts";
+import type { Env } from "./env";
+import { reclaimImageSpace, rollbackImages } from "./image-cleanup";
 export { inspectImage } from "../shared/image-format.ts";
+
+export async function uploadImages(env: Env, files: { bytes: Uint8Array; contentType: string }[]) {
+    if (!files.length) return [];
+    const rows = files.map(file => ({ key: crypto.randomUUID(), contentType: file.contentType, byteSize: file.bytes.length }));
+    const keys = rows.map(row => row.key);
+    const reserve = env.DB.prepare(`INSERT INTO images (key, contentType, byteSize, state, createdAt)
+        SELECT json_extract(value, '$.key'), json_extract(value, '$.contentType'),
+            json_extract(value, '$.byteSize'), 'reserved', ? FROM json_each(?)`)
+        .bind(new Date().toISOString(), JSON.stringify(rows));
+    try {
+        await reserve.run();
+    } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("image_capacity_exceeded")) throw error;
+        await reclaimImageSpace(env, rows.reduce((total, row) => total + row.byteSize, 0));
+        try { await reserve.run(); }
+        catch (retryError) {
+            if (retryError instanceof Error && retryError.message.includes("image_capacity_exceeded")) {
+                await env.DB.prepare("UPDATE image_capacity SET requestedBytes = MAX(requestedBytes, ?) WHERE id = 1")
+                    .bind(rows.reduce((total, row) => total + row.byteSize, 0)).run();
+                throw new HttpError(507, "图片容量不足，清理任务将继续重试，请稍后重新提交。");
+            }
+            throw retryError;
+        }
+    }
+    try {
+        for (const [index, file] of files.entries()) {
+            const key = keys[index];
+            const started = await env.DB.prepare("UPDATE images SET state = 'uploading' WHERE key = ? AND state = 'reserved'").bind(key).run();
+            if (!started.meta.changes) throw new HttpError(409, "图片上传预留已过期，请重新提交。");
+            await env.IMAGES.put(key, file.bytes, { httpMetadata: { contentType: file.contentType } });
+            const uploaded = await env.DB.prepare("UPDATE images SET state = 'uploaded' WHERE key = ? AND state = 'uploading'").bind(key).run();
+            if (!uploaded.meta.changes) throw new HttpError(409, "图片上传预留已过期，请重新提交。");
+        }
+        return keys;
+    } catch (error) {
+        await rollbackImages(env, keys);
+        throw error;
+    }
+}
 
 export async function readImages(form: FormData, retainedCount = 0): Promise<{ bytes: Uint8Array; contentType: string }[]> {
     const files = form.getAll("images");

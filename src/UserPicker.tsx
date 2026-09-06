@@ -18,7 +18,7 @@ export default function UserPicker({ label, value, onChange, disabled, accountRo
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const query = search.trim();
-    const canSearch = /^[a-z0-9_.-]{1,50}$/i.test(query);
+    const canSearch = /^[a-z0-9]{1,32}$/i.test(query);
     useEffect(() => {
         setUsers([]);
         setError("");

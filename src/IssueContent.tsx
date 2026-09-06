@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Box, Button, Modal, Stack, Typography } from "@mui/material";
+import { Box, Button, Modal, Stack, Tooltip, Typography } from "@mui/material";
 import CachedImage from "./CachedImage";
-import { mentionMatches } from "../shared/mentions";
+import type { Mention } from "../shared/types";
+import { textLinks } from "../shared/links";
+import { forgetImage } from "./api";
 
-export default function Content({ description, images }: { description: string; images: string[] }) {
+export default function Content({ description, images, clearedImages = [], mentions = [] }: { description: string; images: string[]; clearedImages?: string[]; mentions?: Mention[] }) {
     const [expandedImage, setExpandedImage] = useState<string | null>(null);
     const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
     const preview = useRef<HTMLDivElement>(null);
     const pointers = useRef(new Map<number, { x: number; y: number }>());
     const dragged = useRef(false);
+    useEffect(() => {
+        for (const key of clearedImages) forgetImage(`/api/images/${key}?private=1`);
+        if (expandedImage !== null && clearedImages.includes(expandedImage)) setExpandedImage(null);
+    }, [clearedImages, expandedImage]);
     useEffect(() => {
         if (expandedImage === null) return;
         const wheel = (event: WheelEvent) => {
@@ -28,22 +34,22 @@ export default function Content({ description, images }: { description: string; 
     function plainText(value: string, start: number) {
         let offset = 0;
         const result: ReactNode[] = [];
-        for (const match of mentionMatches(value)) {
-            result.push(value.slice(offset, match.index), <Box key={`mention-${start + match.index}`} component="span" sx={{ color: "primary.main", fontWeight: 700 }}>{match[0]}</Box>);
-            offset = match.index + match[0].length;
+        for (const mention of mentions.filter(item => item.index >= start && item.index + item.username.length + 1 <= start + value.length).sort((a, b) => a.index - b.index)) {
+            const index = mention.index - start;
+            const text = value.slice(index, index + mention.username.length + 1);
+            const label = mention.deletedAt ? "已删除用户" : `${mention.name} (@${mention.currentUsername}) · ${mention.role === "admin" ? "管理员" : "用户"}`;
+            result.push(value.slice(offset, index), <Tooltip key={`mention-${mention.index}`} title={label}>
+                <Box component="span" tabIndex={0} sx={{ color: "primary.main", fontWeight: 700 }}>{text}{mention.deletedAt ? " (已删除用户)" : ""}</Box>
+            </Tooltip>);
+            offset = index + text.length;
         }
         result.push(value.slice(offset));
         return result;
     }
     let offset = 0;
     const text: ReactNode[] = [];
-    for (const match of description.matchAll(/https?:\/\/[^\s<>"']+/giu)) {
-        let value = match[0].replace(/[.,;!?，。；！？]+$/, "");
-        while (value.endsWith(")") && value.split(")").length > value.split("(").length) value = value.slice(0, -1);
-        let url: URL;
-        try { url = new URL(value); }
-        catch { continue; }
-        if (url.protocol !== "https:" && url.protocol !== "http:") continue;
+    for (const match of textLinks(description)) {
+        const { text: value, url } = match;
         text.push(...plainText(description.slice(offset, match.index), offset));
         const external = url.origin !== window.location.origin;
         text.push(<Box key={`link-${match.index}`} component="a" href={url.href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined} sx={{ color: "primary.main" }}>{value}</Box>);
@@ -52,7 +58,7 @@ export default function Content({ description, images }: { description: string; 
     text.push(...plainText(description.slice(offset), offset));
     return <Stack spacing={2}>
         {description && <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{text}</Typography>}
-        {images.map((key, index) => <Box role="button" tabIndex={0} key={key}
+        {images.map((key, index) => clearedImages.includes(key) ? <Typography key={key} color="text.secondary">[图片已被清理]</Typography> : <Box role="button" tabIndex={0} key={key}
             aria-label={`放大图片 ${index + 1}`}
             aria-expanded={expandedImage === key}
             onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); event.currentTarget.click(); } }}
@@ -72,7 +78,7 @@ export default function Content({ description, images }: { description: string; 
                 display: "block", maxWidth: "100%", maxHeight: 480, objectFit: "contain",
             }} />
         </Box>)}
-        <Modal open={expandedImage !== null} onClose={() => setExpandedImage(null)}
+        <Modal open={expandedImage !== null && !clearedImages.includes(expandedImage)} onClose={() => setExpandedImage(null)}
             slotProps={{ backdrop: { sx: { backgroundColor: "var(--overlay-backdrop)" } } }}>
             <Box ref={preview} role="dialog" aria-modal="true" aria-label="图片放大预览"
                 sx={{ position: "absolute", inset: 0, overflow: "hidden", touchAction: "none" }}>

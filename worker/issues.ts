@@ -1,16 +1,17 @@
 import type { Env } from "./env";
 import type { User } from "../shared/types";
-import { mentionUsernames } from "../shared/mentions";
+import { mentionCandidates } from "../shared/mentions";
+import { mentionDetails, mentionRecords } from "./mentions";
 import { assignmentAccountRoles, assignmentRoles } from "../shared/assignments";
 import { ASSIGNEE_MAX_COUNT, UPLOAD_BODY_MAX_BYTES, TITLE_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from "../shared/limits";
 import { readForm, HttpError } from "./input";
-import { readImages } from "./images";
+import { readImages, uploadImages } from "./images";
 import { rollbackImages } from "./image-cleanup";
 import { timeline } from "./timeline";
 import { createHash } from "node:crypto";
 import { recordOperation } from "./operation-record";
 
-type IssueRow = Omit<import("../shared/types").Issue, "images" | "assignees"> & { images: string; assignees: string };
+type IssueRow = Omit<import("../shared/types").Issue, "images" | "clearedImages" | "assignees" | "mentions"> & { images: string; clearedImages: string; assignees: string; mentions: string };
 
 type ReplyRow = {
     id: number;
@@ -20,6 +21,8 @@ type ReplyRow = {
     authorName: string;
     description: string;
     images: string;
+    clearedImages: string;
+    mentions: string;
     createdAt: string;
 };
 
@@ -34,8 +37,17 @@ export async function issues(request: Request, env: Env, user: User) {
             return Response.json({ error: "获取工单列表：状态或页码无效。" }, { status: 400 });
         }
 
+        const searchCharacters = Array.from(search.replace(/[A-Z]/g, letter => letter.toLowerCase()));
+        const searchTerm = searchCharacters.slice(0, 2).join("");
+        const indexed = searchCharacters.length >= 2;
+        // SQLite length/substr stop at NUL; keep these titles in the candidate set.
+        const candidateFilter = indexed ? ` AND issues.id IN (
+            SELECT issueId FROM issue_search_terms WHERE term = ?
+            UNION SELECT id FROM issues WHERE instr(title, char(0)) > 0
+        )` : "";
+        const searchBindings = indexed ? [search, searchTerm] : [search];
         const [counts, rows] = await env.DB.batch([
-            env.DB.prepare("SELECT status, COUNT(*) AS total FROM issues WHERE instr(lower(title), lower(?)) > 0 GROUP BY status").bind(search),
+            env.DB.prepare("SELECT status, COUNT(*) AS total FROM issues WHERE instr(lower(title), lower(?)) > 0" + candidateFilter + " GROUP BY status").bind(...searchBindings),
             env.DB.prepare(`
                 SELECT issues.id, issues.title, issues.priority, issues.status,
                     issues.stateReason, issues.createdAt, users.name AS authorName,
@@ -52,10 +64,10 @@ export async function issues(request: Request, env: Env, user: User) {
                 FROM issues
                 LEFT JOIN users ON users.id = issues.authorId
                 WHERE status = ?
-                    AND instr(lower(title), lower(?)) > 0
+                    AND instr(lower(title), lower(?)) > 0 ${candidateFilter}
                 ORDER BY issues.id DESC LIMIT 10 OFFSET ?
             `)
-                .bind(status, search, (page - 1) * 10),
+                .bind(status, ...searchBindings, (page - 1) * 10),
         ]);
         const totals = { Open: 0, Closed: 0 };
         for (const row of counts.results as { status: "Open" | "Closed"; total: number }[]) {
@@ -69,8 +81,10 @@ export async function issues(request: Request, env: Env, user: User) {
     if (detailMatch && request.method === "GET") {
         const issue = await env.DB.prepare(`
                 SELECT issues.id, issues.title, issues.description,
+                    ${mentionDetails("issues.mentions")} AS mentions,
                     (SELECT json_group_array(key) FROM (SELECT key FROM images
-                        WHERE images.issueId = issues.id AND state = 'active' ORDER BY position)) AS images,
+                        WHERE images.issueId = issues.id ORDER BY position)) AS images,
+                    (SELECT json_group_array(key) FROM images WHERE images.issueId = issues.id AND state IN ('deleting', 'deleted')) AS clearedImages,
                     issues.priority, issues.status, issues.stateReason, issues.createdAt,
                     issues.authorId, issues.assignmentVersion, issues.version,
                     users.name AS authorName,
@@ -90,7 +104,7 @@ export async function issues(request: Request, env: Env, user: User) {
             `)
             .bind(detailMatch[1]).first<IssueRow>();
         if (!issue) return Response.json({ error: "未找到该工单。" }, { status: 404 });
-        return Response.json({ issue: { ...issue, images: JSON.parse(issue.images), assignees: JSON.parse(issue.assignees) } }, { headers: { "Cache-Control": "no-store" } });
+        return Response.json({ issue: { ...issue, images: JSON.parse(issue.images), clearedImages: JSON.parse(issue.clearedImages), mentions: JSON.parse(issue.mentions), assignees: JSON.parse(issue.assignees) } }, { headers: { "Cache-Control": "no-store" } });
     }
 
     const timelineMatch = url.pathname.match(/^\/api\/issues\/(\d+)\/timeline$/);
@@ -101,12 +115,14 @@ export async function issues(request: Request, env: Env, user: User) {
         const reply = await env.DB.prepare(`
             SELECT replies.id, replies.version, replies.authorId, users.name AS authorName,
                 replies.description, replies.createdAt,
+                ${mentionDetails("replies.mentions")} AS mentions,
                 (SELECT json_group_array(key) FROM (SELECT key FROM images
-                    WHERE images.replyId = replies.id AND state = 'active' ORDER BY position)) AS images
+                    WHERE images.replyId = replies.id ORDER BY position)) AS images,
+                (SELECT json_group_array(key) FROM images WHERE images.replyId = replies.id AND state IN ('deleting', 'deleted')) AS clearedImages
             FROM replies JOIN users ON users.id = replies.authorId WHERE replies.id = ?
         `).bind(singleReply[1]).first<ReplyRow>();
         if (!reply) throw new HttpError(404, "该评论已被删除。");
-        return Response.json({ reply: { ...reply, images: JSON.parse(reply.images) } });
+        return Response.json({ reply: { ...reply, images: JSON.parse(reply.images), clearedImages: JSON.parse(reply.clearedImages), mentions: JSON.parse(reply.mentions) } });
     }
 
     if ((url.pathname === "/api/issues" || replyMatch) && request.method === "POST") {
@@ -116,7 +132,7 @@ export async function issues(request: Request, env: Env, user: User) {
         }
         const form = await readForm(request, UPLOAD_BODY_MAX_BYTES);
         const title = String(form.get("title") ?? "").trim();
-        const description = String(form.get("description") ?? "").trim();
+        const description = String(form.get("description") ?? "");
         if (!replyMatch && assignmentRoles.some(role => form.has(role))) {
             return Response.json({ error: "创建工单：新建时禁止指定产品、开发或测试人员。" }, { status: 400 });
         }
@@ -127,7 +143,7 @@ export async function issues(request: Request, env: Env, user: User) {
         if (!replyMatch && (!title || title.length > TITLE_MAX_LENGTH)) {
             return Response.json({ error: "创建工单：标题不能为空且最多 200 个字符。" }, { status: 400 });
         }
-        if (description.length > DESCRIPTION_MAX_LENGTH || (replyMatch && !description && images.length === 0)) {
+        if (description.length > DESCRIPTION_MAX_LENGTH || (replyMatch && !description.trim() && images.length === 0)) {
             return Response.json({ error: "内容不能为空，文字最多 20000 个字符。" }, { status: 400 });
         }
         const requestKey = request.headers.get("Idempotency-Key") ?? "";
@@ -144,52 +160,38 @@ export async function issues(request: Request, env: Env, user: User) {
             return Response.json({ id: previous.resourceId }, { status: 201 });
         }
 
-        const keys: string[] = [];
+        let keys: string[] = [];
         const creationToken = crypto.randomUUID();
         let committed = false;
         let commitAttempted = false;
         try {
-            for (const file of images) {
-                const key = crypto.randomUUID();
-                keys.push(key);
-                await env.IMAGES.put(key, file.bytes, { httpMetadata: { contentType: file.contentType } });
-            }
+            keys = await uploadImages(env, images);
+            const availableUploads = `(SELECT COUNT(*) FROM images WHERE state = 'uploaded'
+                AND key IN (SELECT value FROM json_each(?))) = ?`;
             const createdAt = new Date().toISOString();
+            const candidates = JSON.stringify(mentionCandidates(description));
             const statement = replyMatch
-                ? env.DB.prepare(`INSERT INTO replies (issueId, authorId, description, creationToken, createdAt)
-                    SELECT ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?)`)
-                    .bind(replyMatch[1], user.id, description, creationToken, createdAt, user.id, requestKey)
-                : env.DB.prepare(`INSERT INTO issues (title, description, priority, creationToken, createdAt, authorId)
-                    SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?)`)
-                    .bind(title, description, "Low", creationToken, createdAt, user.id, user.id, requestKey);
-            const mentions = JSON.stringify(mentionUsernames(description));
+                ? env.DB.prepare(`INSERT INTO replies (issueId, authorId, description, mentions, creationToken, createdAt)
+                    SELECT ?, ?, ?, ${mentionRecords}, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?) AND ${availableUploads}`)
+                    .bind(replyMatch[1], user.id, description, candidates, creationToken, createdAt, user.id, requestKey, JSON.stringify(keys), keys.length)
+                : env.DB.prepare(`INSERT INTO issues (title, description, mentions, priority, creationToken, createdAt, authorId)
+                    SELECT ?, ?, ${mentionRecords}, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?) AND ${availableUploads}`)
+                    .bind(title, description, candidates, "Low", creationToken, createdAt, user.id, user.id, requestKey, JSON.stringify(keys), keys.length);
             const notifications = replyMatch
                 ? env.DB.prepare(`
-                INSERT OR IGNORE INTO notifications (userId, actorId, issueId, replyId, kind, source, createdAt)
-                SELECT users.id, ?, replies.issueId, replies.id, 'mention', 'reply:' || replies.id, ?
-                FROM users
-                CROSS JOIN replies
-                WHERE changes() > 0
-                AND replies.creationToken = ?
-                AND users.deletedAt IS NULL
-                AND users.id != ?
-                AND users.username IN (SELECT value
-                FROM json_each(?))
-            `)
-                    .bind(user.id, createdAt, creationToken, user.id, mentions)
+                    INSERT OR IGNORE INTO notifications (userId, actorId, issueId, replyId, kind, source, createdAt)
+                    SELECT mentioned.id, ?, replies.issueId, replies.id, 'mention', 'reply:' || replies.id, ?
+                    FROM replies JOIN json_each(replies.mentions) AS reference
+                    JOIN users AS mentioned ON mentioned.id = json_extract(reference.value, '$.userId')
+                    WHERE replies.creationToken = ? AND mentioned.deletedAt IS NULL AND mentioned.id != ?
+                `).bind(user.id, createdAt, creationToken, user.id)
                 : env.DB.prepare(`
-                INSERT OR IGNORE INTO notifications (userId, actorId, issueId, kind, source, createdAt)
-                SELECT users.id, ?, issues.id, 'mention', 'issue:' || issues.id, ?
-                FROM users
-                CROSS JOIN issues
-                WHERE changes() > 0
-                AND issues.creationToken = ?
-                AND users.deletedAt IS NULL
-                AND users.id != ?
-                AND users.username IN (SELECT value
-                FROM json_each(?))
-            `)
-                    .bind(user.id, createdAt, creationToken, user.id, mentions);
+                    INSERT OR IGNORE INTO notifications (userId, actorId, issueId, kind, source, createdAt)
+                    SELECT mentioned.id, ?, issues.id, 'mention', 'issue:' || issues.id, ?
+                    FROM issues JOIN json_each(issues.mentions) AS reference
+                    JOIN users AS mentioned ON mentioned.id = json_extract(reference.value, '$.userId')
+                    WHERE issues.creationToken = ? AND mentioned.deletedAt IS NULL AND mentioned.id != ?
+                `).bind(user.id, createdAt, creationToken, user.id);
             const remember = env.DB.prepare(`
                 INSERT OR IGNORE INTO mutation_requests (userId, requestKey, route, fingerprint, resourceId, createdAt)
                 SELECT ?, ?, ?, ?, id, ? FROM ${replyMatch ? "replies" : "issues"} WHERE creationToken = ?
@@ -199,28 +201,22 @@ export async function issues(request: Request, env: Env, user: User) {
                 SELECT ?, ?, json_object('resourceId', resourceId), ? FROM mutation_requests
                 WHERE userId = ? AND requestKey = ? AND changes() > 0 AND ? = 'admin'
             `).bind(user.id, replyMatch ? "reply_created" : "issue_created", createdAt, user.id, requestKey, user.role);
-            const imageRows = JSON.stringify(keys.map((key, index) => ({
-                key, contentType: images[index].contentType, byteSize: images[index].bytes.length,
-            })));
-            const attachImages = env.DB.prepare(replyMatch ? `
-                INSERT INTO images (key, replyId, position, contentType, byteSize, state, createdAt)
-                SELECT json_extract(value, '$.key'), replies.id, key, json_extract(value, '$.contentType'),
-                    json_extract(value, '$.byteSize'), 'active', ?
-                FROM json_each(?) CROSS JOIN replies WHERE replies.creationToken = ?
-            ` : `
-                INSERT INTO images (key, issueId, position, contentType, byteSize, state, createdAt)
-                SELECT json_extract(value, '$.key'), issues.id, key, json_extract(value, '$.contentType'),
-                    json_extract(value, '$.byteSize'), 'active', ?
-                FROM json_each(?) CROSS JOIN issues WHERE issues.creationToken = ?
-            `).bind(createdAt, imageRows, creationToken);
+            const table = replyMatch ? "replies" : "issues";
+            const attachImages = env.DB.prepare(`UPDATE images SET
+                ${replyMatch ? "replyId" : "issueId"} = (SELECT id FROM ${table} WHERE creationToken = ?),
+                position = (SELECT key FROM json_each(?) WHERE value = images.key), state = 'active'
+                WHERE state = 'uploaded' AND key IN (SELECT value FROM json_each(?))
+                    AND EXISTS (SELECT 1 FROM ${table} WHERE creationToken = ?)`)
+                .bind(creationToken, JSON.stringify(keys), JSON.stringify(keys), creationToken);
             commitAttempted = true;
             const [created] = await env.DB.batch([statement, notifications, remember, operation, attachImages]);
             committed = created.meta.changes > 0;
             if (!created.meta.changes) await rollbackImages(env, keys);
             const saved = await env.DB.prepare("SELECT route, fingerprint, resourceId FROM mutation_requests WHERE userId = ? AND requestKey = ?")
                 .bind(user.id, requestKey).first<{ route: string; fingerprint: string; resourceId: number }>();
-            if (saved!.route !== url.pathname || saved!.fingerprint !== fingerprint) throw new HttpError(409, "此提交标识已用于其他内容，请重新提交。");
-            return Response.json({ id: saved!.resourceId }, { status: 201 });
+            if (!saved) throw new HttpError(409, "图片上传预留已过期，请重新提交。");
+            if (saved.route !== url.pathname || saved.fingerprint !== fingerprint) throw new HttpError(409, "此提交标识已用于其他内容，请重新提交。");
+            return Response.json({ id: saved.resourceId }, { status: 201 });
         } catch (error) {
             if (!commitAttempted) await rollbackImages(env, keys);
             else if (!committed) console.error("创建内容的提交结果待核对，保留图片", requestKey, keys, error);
@@ -231,9 +227,9 @@ export async function issues(request: Request, env: Env, user: User) {
     const commentMatch = url.pathname.match(/^\/api\/replies\/(\d+)$/);
     if (commentMatch && ["PATCH", "DELETE"].includes(request.method)) {
         const reply = await env.DB.prepare(`
-            SELECT id, issueId, authorId, description, version, createdAt,
+            SELECT id, issueId, authorId, description, mentions, version, createdAt,
                 (SELECT json_group_array(key) FROM (SELECT key FROM images
-                    WHERE replyId = replies.id AND state = 'active' ORDER BY position)) AS images
+                    WHERE replyId = replies.id ORDER BY position)) AS images
             FROM replies WHERE id = ?
         `).bind(commentMatch[1]).first<ReplyRow>();
         if (!reply) return Response.json({ error: "未找到该评论。" }, { status: 404 });
@@ -249,7 +245,7 @@ export async function issues(request: Request, env: Env, user: User) {
                 FROM replies WHERE id = ? AND version = ?
             `).bind(user.id, new Date().toISOString(), reply.id, reply.version);
             const removeImages = env.DB.prepare(`
-                UPDATE images SET replyId = NULL, position = NULL, state = 'deleting'
+                UPDATE images SET replyId = NULL, position = NULL, state = CASE WHEN state = 'deleted' THEN state ELSE 'deleting' END
                 WHERE replyId = ? AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
             `).bind(reply.id, reply.id, reply.version);
             const remove = env.DB.prepare("DELETE FROM replies WHERE id = ? AND version = ?").bind(reply.id, reply.version);
@@ -259,27 +255,31 @@ export async function issues(request: Request, env: Env, user: User) {
             return Response.json({ ok: true });
         }
         const form = await readForm(request, UPLOAD_BODY_MAX_BYTES);
-        const description = String(form.get("description") ?? "").trim();
+        const description = String(form.get("description") ?? "");
         const retained = form.getAll("retainedImages") as string[];
         const files = await readImages(form, retained.length);
         if (retained.some(key => !oldImages.includes(key)) || new Set(retained).size !== retained.length) return Response.json({ error: "评论图片无效。" }, { status: 400 });
-        if (description.length > DESCRIPTION_MAX_LENGTH || (!description && !retained.length && !files.length)) return Response.json({ error: "评论不能为空，文字最多 20000 个字符。" }, { status: 400 });
-        const uploaded: string[] = [];
+        if (description.length > DESCRIPTION_MAX_LENGTH || (!description.trim() && !retained.length && !files.length)) return Response.json({ error: "评论不能为空，文字最多 20000 个字符。" }, { status: 400 });
+        const previousMentions: { username: string; userId: number }[] = JSON.parse(reply.mentions);
+        const mentionedUsers = new Map(previousMentions.map(mention => [mention.username, mention.userId]));
+        const candidates = JSON.stringify(mentionCandidates(description).map(candidate => ({
+            ...candidate, userId: mentionedUsers.get(candidate.username) ?? null,
+        })));
+        let uploaded: string[] = [];
         let commitAttempted = false;
         try {
-            for (const file of files) {
-                const key = crypto.randomUUID();
-                uploaded.push(key);
-                await env.IMAGES.put(key, file.bytes, { httpMetadata: { contentType: file.contentType } });
-            }
+            uploaded = await uploadImages(env, files);
+            const availableUploads = `(SELECT COUNT(*) FROM images WHERE state = 'uploaded'
+                AND key IN (SELECT value FROM json_each(?))) = ?`;
+            const uploadBindings = [JSON.stringify(uploaded), uploaded.length];
             const removed = oldImages.filter(key => !retained.includes(key));
             const recordEdit = env.DB.prepare(`
                 INSERT INTO events (channel, issueId, actorId, action, details, createdAt)
                 SELECT 'timeline', issueId, ?, 'reply_edited', json_object('replyId', id), ?
                 FROM replies
                 WHERE id = ?
-                AND version = ?
-            `).bind(user.id, new Date().toISOString(), reply.id, reply.version);
+                AND version = ? AND ${availableUploads}
+            `).bind(user.id, new Date().toISOString(), reply.id, reply.version, ...uploadBindings);
             const notifyMentions = env.DB.prepare(`
                 INSERT OR IGNORE INTO notifications (userId, actorId, issueId, replyId, kind, source, createdAt)
                 SELECT users.id, ?, replies.issueId, replies.id, 'mention', 'reply:' || replies.id, ?
@@ -289,40 +289,38 @@ export async function issues(request: Request, env: Env, user: User) {
                 AND replies.version = ?
                 AND users.deletedAt IS NULL
                 AND users.id != ?
-                AND users.username IN (SELECT value
-                FROM json_each(?))
+                AND users.id IN (SELECT json_extract(value, '$.userId')
+                FROM json_each(${mentionRecords})) AND ${availableUploads}
             `)
-                    .bind(user.id, new Date().toISOString(), reply.id, reply.version, user.id, JSON.stringify(mentionUsernames(description)));
+                    .bind(user.id, new Date().toISOString(), reply.id, reply.version, user.id, candidates, ...uploadBindings);
             const queueRemovedImages = env.DB.prepare(`
-                UPDATE images SET replyId = NULL, position = NULL, state = 'deleting'
+                UPDATE images SET replyId = NULL, position = NULL, state = CASE WHEN state = 'deleted' THEN state ELSE 'deleting' END
                 WHERE key IN (SELECT value FROM json_each(?)) AND replyId = ?
-                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
-            `).bind(JSON.stringify(removed), reply.id, reply.id, reply.version);
-            const detachRetained = env.DB.prepare(`
-                UPDATE images SET replyId = NULL, position = NULL, state = 'deleting'
+                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
+            `).bind(JSON.stringify(removed), reply.id, reply.id, reply.version, ...uploadBindings);
+            const moveRetained = env.DB.prepare(`
+                UPDATE images SET position = position + 10
                 WHERE replyId = ? AND key IN (SELECT value FROM json_each(?))
-                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
-            `).bind(reply.id, JSON.stringify(retained), reply.id, reply.version);
+                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
+            `).bind(reply.id, JSON.stringify(retained), reply.id, reply.version, ...uploadBindings);
             const attachRetained = env.DB.prepare(`
-                UPDATE images SET replyId = ?, position = (SELECT key FROM json_each(?) WHERE value = images.key), state = 'active'
-                WHERE key IN (SELECT value FROM json_each(?)) AND state = 'deleting'
-                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
-            `).bind(reply.id, JSON.stringify(retained), JSON.stringify(retained), reply.id, reply.version);
-            const imageRows = JSON.stringify(uploaded.map((key, index) => ({
-                key, contentType: files[index].contentType, byteSize: files[index].bytes.length,
-            })));
+                UPDATE images SET position = (SELECT key FROM json_each(?) WHERE value = images.key)
+                WHERE replyId = ? AND key IN (SELECT value FROM json_each(?))
+                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
+            `).bind(JSON.stringify(retained), reply.id, JSON.stringify(retained), reply.id, reply.version, ...uploadBindings);
             const attachUploaded = env.DB.prepare(`
-                INSERT INTO images (key, replyId, position, contentType, byteSize, state, createdAt)
-                SELECT json_extract(value, '$.key'), ?, ? + key, json_extract(value, '$.contentType'),
-                    json_extract(value, '$.byteSize'), 'active', ?
-                FROM json_each(?) WHERE EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
-            `).bind(reply.id, retained.length, new Date().toISOString(), imageRows, reply.id, reply.version);
-            const updateReply = env.DB.prepare("UPDATE replies SET description = ?, version = version + 1 WHERE id = ? AND version = ?")
-                    .bind(description, reply.id, reply.version);
+                UPDATE images SET replyId = ?, position = ? + (SELECT key FROM json_each(?) WHERE value = images.key), state = 'active'
+                WHERE state = 'uploaded' AND key IN (SELECT value FROM json_each(?))
+                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
+            `).bind(reply.id, retained.length, JSON.stringify(uploaded), JSON.stringify(uploaded), reply.id, reply.version, ...uploadBindings);
+            const updateReply = env.DB.prepare(`UPDATE replies SET description = ?, mentions = ${mentionRecords}, version = version + 1
+                WHERE id = ? AND version = ? AND (SELECT COUNT(*) FROM images WHERE replyId = replies.id
+                    AND state = 'active' AND key IN (SELECT value FROM json_each(?))) = ?`)
+                    .bind(description, candidates, reply.id, reply.version, ...uploadBindings);
             const operation = recordOperation(env.DB, user, "reply_edited", { replyId: reply.id, issueId: reply.issueId });
             commitAttempted = true;
             const [_editEvent, _mentionResult, _imageResult, _detachResult, _retainedResult, _uploadedResult, result] = await env.DB.batch([
-                recordEdit, notifyMentions, queueRemovedImages, detachRetained, attachRetained, attachUploaded, updateReply, operation,
+                recordEdit, notifyMentions, queueRemovedImages, moveRetained, attachRetained, attachUploaded, updateReply, operation,
             ]);
             if (!result.meta.changes) {
                 await rollbackImages(env, uploaded);

@@ -2,13 +2,14 @@ import { Buffer } from "node:buffer";
 import type { TimelineEntry } from "../shared/types";
 import type { Env } from "./env";
 import { HttpError } from "./input";
+import { mentionDetails } from "./mentions";
 
 type Boundary = [string, string, number];
 type Cursor = { issueId: string; after: Boundary; before: Boundary };
 type Row = {
     id: number; kind: TimelineEntry["kind"]; actorId: number | null; actorName: string | null;
-    createdAt: string; description: string | null; images: string | null;
-    version: number | null; details: string | null;
+    createdAt: string; description: string | null; images: string | null; clearedImages: string;
+    version: number | null; details: string | null; mentions: string;
 };
 const source = `
     WITH timeline AS (
@@ -22,9 +23,10 @@ const source = `
     )`;
 const select = `
     SELECT t.id, t.kind, t.actorId, t.createdAt, users.name AS actorName,
-        replies.description,
+        replies.description, ${mentionDetails("replies.mentions")} AS mentions,
         (SELECT json_group_array(key) FROM (SELECT key FROM images
-            WHERE replyId = replies.id AND state = 'active' ORDER BY position)) AS images,
+            WHERE replyId = replies.id ORDER BY position)) AS images,
+        (SELECT json_group_array(key) FROM images WHERE replyId = replies.id AND state IN ('deleting', 'deleted')) AS clearedImages,
         replies.version, events.details
     FROM timeline t LEFT JOIN users ON users.id = t.actorId
     LEFT JOIN replies ON t.kind = 'reply' AND replies.id = t.id
@@ -34,7 +36,7 @@ const select = `
 function entry(row: Row): TimelineEntry {
     if (row.kind === "reply") return {
         id: row.id, kind: "reply", authorId: row.actorId!, authorName: row.actorName!,
-        createdAt: row.createdAt, description: row.description!, images: JSON.parse(row.images!), version: row.version!,
+        createdAt: row.createdAt, description: row.description!, images: JSON.parse(row.images!), clearedImages: JSON.parse(row.clearedImages), mentions: JSON.parse(row.mentions), version: row.version!,
     };
     return { id: row.id, kind: row.kind, actorName: row.actorName, createdAt: row.createdAt, details: JSON.parse(row.details!) };
 }

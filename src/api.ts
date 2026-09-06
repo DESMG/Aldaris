@@ -118,6 +118,13 @@ export function cachedImage(url: string, { refresh = false }: { refresh?: boolea
     return request;
 }
 
+export function forgetImage(url: string) {
+    const cached = imageCache.get(url);
+    if (cached) imageCacheBytes -= cached.blob.size;
+    imageCache.delete(url);
+    pendingImages.delete(url);
+}
+
 export class ApiError extends Error {
     status: number;
     constructor(status: number, message: string) { super(message); this.name = "ApiError"; this.status = status; }

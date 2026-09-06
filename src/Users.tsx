@@ -5,7 +5,8 @@ import type { User } from "./api";
 import type { ManagedUser } from "../shared/types";
 import PasswordStrength from "./PasswordStrength";
 import { useDraftGuard } from "./DraftGuard";
-import { NAME_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "../shared/limits";
+import { NAME_MAX_LENGTH, USERNAME_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "../shared/limits";
+import { useTextDraft } from "./useTextDraft";
 
 export default function Users({ user, onUserChange }: { user: User; onUserChange: (user: User | null) => void }) {
     const apiSession = getApiSessionGeneration();
@@ -13,8 +14,8 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     const [after, setAfter] = useState(0);
     const [next, setNext] = useState<number | null>(cached?.next ?? null);
     const [password, setPassword] = useState("");
-    const [editName, setEditName] = useState("");
-    const [editUsername, setEditUsername] = useState("");
+    const draft = useTextDraft("edit-user", { id: 0, version: 0, name: "", username: "" });
+    const { name: editName, username: editUsername } = draft.value;
     const [confirmPassword, setConfirmPassword] = useState("");
     const [users, setUsers] = useState<ManagedUser[]>(() => cached?.users ?? []);
     const [editing, setEditing] = useState<ManagedUser | null>(null);
@@ -33,13 +34,28 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     const lastRefresh = useRef(refresh);
     const listEnd = useRef<HTMLDivElement>(null);
     const dirty = editOpen && editing !== null && (conflict || editName !== editing.name || editUsername !== editing.username || password !== "" || confirmPassword !== "");
-    const clearGuard = useDraftGuard(dirty);
+    const clearGuard = useDraftGuard(dirty, draft.clear);
 
     function closeEditor() {
         if (saving || reloading || (dirty && !window.confirm("放弃尚未保存的用户资料修改？"))) return;
         clearGuard();
+        draft.clear();
         setEditOpen(false);
     }
+
+    const restoredDraft = useRef<typeof draft.value | null>(draft.value);
+    useEffect(() => {
+        const saved = restoredDraft.current;
+        if (user.role !== "admin" || !saved?.id) return;
+        let active = true;
+        api(`/api/admin/users/${saved.id}`).then(response => response.json()).then((data: { user: ManagedUser }) => {
+            if (!active || restoredDraft.current !== saved) return;
+            setEditing({ ...data.user, version: saved.version });
+            setConflict(data.user.version !== saved.version);
+            setEditOpen(true);
+        }).catch(error => { if (active && restoredDraft.current === saved) setListError(`恢复用户资料草稿失败：${String(error)}`); });
+        return () => { active = false; };
+    }, [user.role]);
 
     useEffect(() => {
         if (user.role !== "admin") return;
@@ -84,6 +100,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
             <Button href="/admin/users/new" variant="contained">创建用户</Button>
         </Stack>
         <Typography component="h1" variant="h5">用户管理</Typography>
+        {draft.error && <Alert severity="error">{draft.error}</Alert>}
         {loading && users.length === 0 && <Typography role="status">正在读取用户…</Typography>}
         <Dialog open={editOpen} onClose={closeEditor} fullWidth maxWidth="xs" aria-labelledby="edit-user-title" transitionDuration={reducedMotion ? 0 : 440} slotProps={{ transition: { onExited: () => { setEditing(null); setPassword(""); setConfirmPassword(""); } }, paper: { sx: { p: { xs: 3, sm: 4 }, maxWidth: 440 } } }}>
         {editing &&
@@ -98,6 +115,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                     const response = await api(`/api/admin/users/${editing.id}`, { method: "PATCH", headers: { "If-Match": `"${editing.version}"` }, body, expectedSession: apiSession });
                     const data: { user: ManagedUser } = await response.json();
                     assertApiSession(apiSession);
+                    draft.clear();
                     clearGuard();
                     setEditOpen(false);
                     if (editing.id === user.id) {
@@ -135,13 +153,15 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                         <Typography variant="body2">请与下方表单比较。保留表单后，需要再次点击保存修改；填写的新密码也会被提交。</Typography>
                         <Button disabled={saving || reloading} onClick={() => {
                             setEditing(latest);
+                            draft.setValue({ ...draft.value, version: latest.version });
                             setConflict(false);
                             setLatest(null);
                             setError("");
                         }}>保留表单并使用此版本</Button>
                     </Stack></Paper>}
-                    <TextField name="name" label="昵称" value={editName} onChange={event => setEditName(event.target.value)} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH } }} />
-                    <TextField name="username" label="用户名" value={editUsername} onChange={event => setEditUsername(event.target.value)} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: 50 } }} />
+                    <TextField name="name" label="昵称" value={editName} onChange={event => { draft.setValue({ ...draft.value, name: event.target.value }); event.target.setCustomValidity(Array.from(event.target.value).length > NAME_MAX_LENGTH ? "昵称最多 32 个字符。" : ""); }} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH * 2 } }} />
+                    <TextField name="username" label="用户名" value={editUsername} onChange={event => draft.setValue({ ...draft.value, username: event.target.value })} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: USERNAME_MAX_LENGTH, pattern: "[A-Za-z]+[0-9]*" } }} helperText="本人姓名的英文拼音，重名在末尾加数字，最多 32 字符" />
+                    <Typography variant="caption" color="text.secondary">用户名和昵称在本标签页自动保存；密码需重新填写。</Typography>
                     <TextField name="password" value={password} onChange={event => setPassword(event.target.value)} label="新密码" type="password" autoComplete="new-password" helperText="留空则保留原密码" disabled={saving || reloading} slotProps={{ htmlInput: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } }} />
                     <PasswordStrength password={password} />
                     <TextField name="confirmPassword" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} label="确认新密码" type="password" autoComplete="new-password" disabled={saving || reloading} slotProps={{ htmlInput: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } }} />
@@ -157,7 +177,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                     <Typography variant="caption" color="text.secondary">{account.username}</Typography>
                 </Box>
                 <Chip size="small" label={account.role === "admin" ? "管理员" : "用户"} variant="outlined" />
-                <Button variant="outlined" disabled={saving || loading || editing !== null} onClick={() => { setEditing(account); setEditName(account.name); setEditUsername(account.username); setPassword(""); setConfirmPassword(""); setConflict(false); setLatest(null); setEditOpen(true); setError(""); }}>编辑</Button>
+                <Button variant="outlined" disabled={saving || loading || editing !== null} onClick={() => { restoredDraft.current = null; setEditing(account); draft.setValue({ id: account.id, version: account.version, name: account.name, username: account.username }); setPassword(""); setConfirmPassword(""); setConflict(false); setLatest(null); setEditOpen(true); setError(""); }}>编辑</Button>
                 <Button variant="text" color="error" disabled={saving || loading || account.id === user.id} onClick={() => { setError(""); setDeleteConflict(false); setDeleting(account); }}>删除</Button>
             </Stack>
         </Paper>)}

@@ -1,7 +1,11 @@
+import { textLinks } from "./links";
+
 export function mentionMatches(text: string) {
-    return [...text.matchAll(/(?<![\p{L}\p{N}_@.+-])@([a-z0-9_.-]{1,50})(?![a-z0-9_.-])/giu)];
+    const links = textLinks(text);
+    return [...text.matchAll(/(?<![A-Za-z0-9_@.+-])@([A-Za-z][A-Za-z0-9]{0,31})(?= )/gu)]
+        .filter(match => !links.some(link => match.index >= link.index && match.index < link.index + link.text.length));
 }
 
-export function mentionUsernames(text: string) {
-    return [...new Set(mentionMatches(text).map(match => match[1].toLowerCase()))];
+export function mentionCandidates(text: string) {
+    return mentionMatches(text).map(match => ({ index: match.index, username: match[1].toLowerCase() }));
 }
