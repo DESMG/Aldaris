@@ -79,6 +79,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography>数据处理方式或服务功能变化时，本政策应相应更新。重要变化应由运营者通过团队约定的渠道说明，并按适用要求取得必要授权。请结合本站公开政策及运营者说明了解实际处理方式。</Typography>
                 <Typography>隐私、账户资料、数据副本、删除或安全问题，请通过取得账户时使用的团队渠道联系管理员；涉及基础设施或运营主体的问题，请要求转交运营者。仅提供定位问题所需的信息，请勿发送密码、完整登录凭据或无关个人资料。</Typography>
             </> : <>
+                <Typography>Aldaris 采用 GNU Affero General Public License 第 3 版 (AGPL-3.0-only) 授权，仅适用第 3 版。您可以依照许可证获取、修改和再分发本软件。本使用条款不限制该许可证授予您的软件权利。请参阅<Link href="/license">开源许可</Link>及<Link href="https://github.com/DESMG/Aldaris">源代码</Link>。</Typography>
                 <Typography>本使用条款适用于当前 Aldaris 团队工单协作站点。请在使用账户和提交内容前完整阅读，并结合<Link href="/privacy">隐私政策</Link>了解信息处理方式。若无法接受本服务的共享范围或留存方式，请先联系管理员安排其他协作方式。</Typography>
                 <Alert severity="warning">本站供单个团队内部协作，工单内容对同一部署内的已登录成员可见。本站不承诺持续可用、永久保存或恢复数据；容量不足时，尚未完成的工单图片也可能被自动清理。</Alert>
 

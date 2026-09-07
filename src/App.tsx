@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useRef, useState } from "react";
+import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from "react";
 
 import { Alert, Avatar, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, GlobalStyles, IconButton, LinearProgress, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
 import Container from "@mui/material/Container";
@@ -16,6 +16,8 @@ import PolicyPage from "./PolicyPage";
 import ConfirmDialog, { cancelConfirmation, confirmAction } from "./ConfirmDialog";
 import { api, navigate, getLoginSession, setLoginSession, synchronizeSession, LOGIN_STORAGE_KEY, getApiSessionGeneration, assertApiSession } from "./api";
 import type { User } from "./api";
+
+const LicensePage = lazy(() => import("./LicensePage"));
 
 const slogans = [
     "唉，你竟堕落至此？曾几何时，你是我们最耀眼的希望，是我们最珍视的子嗣；如今，你却已与我们背道而驰，彻底迷失。你不仅自取沉沦，更将那些追随你的人也一同拖入了深渊。",
@@ -77,7 +79,7 @@ export default function App() {
     }
 
     useEffect(() => {
-        if (!loading && !error && !user && !pausedAccount && !["/login", "/privacy", "/terms"].includes(pathname)) {
+        if (!loading && !error && !user && !pausedAccount && !["/login", "/privacy", "/terms", "/license"].includes(pathname)) {
             const loginPath = `/login?next=${encodeURIComponent(path)}`;
             window.history.replaceState(window.history.state, "", loginPath);
             setPath(loginPath);
@@ -210,7 +212,7 @@ export default function App() {
                     const link = (event.target as Element).closest("a");
                     if (!link || link.origin !== window.location.origin || link.target || link.hasAttribute("download")) return;
                     if (link.hash) return;
-                    if (!["/", "/login", "/account", "/privacy", "/terms", "/operations", "/admin/users", "/admin/users/new"].includes(link.pathname)
+                    if (!["/", "/login", "/account", "/privacy", "/terms", "/license", "/operations", "/admin/users", "/admin/users/new"].includes(link.pathname)
                         && !/^\/issues\/\d+$/.test(link.pathname)) return;
                     event.preventDefault();
                     navigate(link.pathname + link.search + link.hash);
@@ -268,7 +270,7 @@ export default function App() {
                         </Box>}
                         {loading && <LinearProgress aria-label="读取登录状态" />}
                         {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{error}</Alert>}
-                        {pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={path.split("?")[1] ?? ""} />
+                        {pathname === "/license" ? <Suspense fallback={<LinearProgress aria-label="读取开源许可" />}><LicensePage /></Suspense> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={path.split("?")[1] ?? ""} />
                             : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
                             : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
                             : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
@@ -284,6 +286,8 @@ export default function App() {
                         }}>
                             <Button href="/privacy" variant="text" aria-current={pathname === "/privacy" ? "page" : undefined}>隐私政策</Button>
                             <Button href="/terms" variant="text" aria-current={pathname === "/terms" ? "page" : undefined}>使用条款</Button>
+                            <Button href="/license" variant="text" aria-current={pathname === "/license" ? "page" : undefined}>开源许可</Button>
+                            <Button href="https://github.com/DESMG/Aldaris" variant="text">源代码</Button>
                         </Stack>
                     </Stack>
                 </Container>

@@ -28,7 +28,7 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
     const mounted = useRef(true);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
     const next = new URLSearchParams(window.location.search).get("next") ?? "/";
-    const destination = ["/account", "/admin/users", "/admin/users/new", "/operations", "/privacy", "/terms"].includes(next)
+    const destination = ["/account", "/admin/users", "/admin/users/new", "/operations", "/privacy", "/terms", "/license"].includes(next)
         || /^\/issues\/\d+(?:\?reply=\d+)?$/.test(next) || /^\/(?:\?[^#]*)?$/.test(next) ? next : "/";
     const title = mode === "create-user" ? "创建用户" : mode === "account" ? "修改密码" : "登录";
 
