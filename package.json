@@ -8,11 +8,13 @@
         "node": ">=22.12.0"
     },
     "scripts": {
-        "check": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
         "dev": "vite",
+        "migrate": "wrangler d1 migrations apply DB --local",
+        "migrate:remote": "wrangler d1 migrations apply DB --remote",
+        "check": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json",
+        "build": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json && vite build",
         "preview": "vite preview",
-        "build": "npm run check && vite build",
-        "deploy": "npm run build && wrangler deploy"
+        "deploy": "tsc -p tsconfig.json && tsc -p tsconfig.worker.json && vite build && wrangler deploy"
     },
     "dependencies": {
         "@emotion/react": "11.14.0",
