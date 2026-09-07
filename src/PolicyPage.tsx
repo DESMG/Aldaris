@@ -52,9 +52,9 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography>浏览器可能保留页面和图片副本，本站删除图片后，这些副本仍可能存在。清除设备上的站点数据不会删除本站保存的账户和协作记录。禁止浏览器保存数据可能影响登录或草稿功能。</Typography>
 
                 <Typography component="h2" variant="h6">六、第三方服务与外部请求</Typography>
-                <Typography>Cloudflare：提供本站的运行和数据保存服务，会处理访问请求及您提交的数据。详情见<Link href="https://www.cloudflare.com/privacypolicy/">Cloudflare 隐私政策</Link>。</Typography>
-                <Typography>Google Fonts：页面从该服务加载字体，浏览器会发送字体请求及建立连接所需的网络信息。字体请求不需要提交您的工单正文或账户密码。详情见<Link href="https://fonts.google.com/faq">Google Fonts 常见问题</Link>和<Link href="https://policies.google.com/privacy">Google 隐私政策</Link>。</Typography>
-                <Typography>Have I Been Pwned：设置新密码时提供泄露风险检查，会接收由密码生成的部分校验信息及网络信息，不会收到完整密码。检查结果仅供参考，未出现风险提示不代表密码安全。详情见<Link href="https://haveibeenpwned.com/API/v3#PwnedPasswords">密码泄露查询说明</Link>。</Typography>
+                <Typography>Cloudflare：提供本站的运行和数据保存服务，会处理访问请求及您提交的数据。详情见<Link href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="external noopener noreferrer nofollow">Cloudflare 隐私政策</Link>。</Typography>
+                <Typography>Google Fonts：页面从该服务加载字体，浏览器会发送字体请求及建立连接所需的网络信息。字体请求不需要提交您的工单正文或账户密码。详情见<Link href="https://fonts.google.com/faq" target="_blank" rel="external noopener noreferrer nofollow">Google Fonts 常见问题</Link>和<Link href="https://policies.google.com/privacy" target="_blank" rel="external noopener noreferrer nofollow">Google 隐私政策</Link>。</Typography>
+                <Typography>Have I Been Pwned：设置新密码时提供泄露风险检查，会接收由密码生成的部分校验信息及网络信息，不会收到完整密码。检查结果仅供参考，未出现风险提示不代表密码安全。详情见<Link href="https://haveibeenpwned.com/API/v3#PwnedPasswords" target="_blank" rel="external noopener noreferrer nofollow">密码泄露查询说明</Link>。</Typography>
                 <Typography>外部服务的内容和政策可能变化，其不可用可能影响字体显示或密码辅助检查。列出这些服务用途不代表本站向每一家服务商发送全部业务内容；访问外部链接后的信息处理由相应提供方负责。</Typography>
 
                 <Typography component="h2" variant="h6">七、保存位置与安全措施</Typography>
@@ -79,7 +79,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography>数据处理方式或服务功能变化时，本政策应相应更新。重要变化应由运营者通过团队约定的渠道说明，并按适用要求取得必要授权。请结合本站公开政策及运营者说明了解实际处理方式。</Typography>
                 <Typography>隐私、账户资料、数据副本、删除或安全问题，请通过取得账户时使用的团队渠道联系管理员；涉及基础设施或运营主体的问题，请要求转交运营者。仅提供定位问题所需的信息，请勿发送密码、完整登录凭据或无关个人资料。</Typography>
             </> : <>
-                <Typography>Aldaris 采用 GNU Affero General Public License 第 3 版 (AGPL-3.0-only) 授权，仅适用第 3 版。您可以依照许可证获取、修改和再分发本软件。本使用条款不限制该许可证授予您的软件权利。请参阅<Link href="/license">开源许可</Link>及<Link href="https://github.com/DESMG/Aldaris">源代码</Link>。</Typography>
+                <Typography>Aldaris 采用 GNU Affero General Public License 第 3 版 (AGPL-3.0-only) 授权，仅适用第 3 版。您可以依照许可证获取、修改和再分发本软件。本使用条款不限制该许可证授予您的软件权利。请参阅<Link href="/license">开源许可</Link>及<Link href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">源代码</Link>。</Typography>
                 <Typography>本使用条款适用于当前 Aldaris 团队工单协作站点。请在使用账户和提交内容前完整阅读，并结合<Link href="/privacy">隐私政策</Link>了解信息处理方式。若无法接受本服务的共享范围或留存方式，请先联系管理员安排其他协作方式。</Typography>
                 <Alert severity="warning">本站供单个团队内部协作，工单内容对同一部署内的已登录成员可见。本站不承诺持续可用、永久保存或恢复数据；容量不足时，尚未完成的工单图片也可能被自动清理。</Alert>
 

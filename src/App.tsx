@@ -287,7 +287,7 @@ export default function App() {
                             <Button href="/privacy" variant="text" aria-current={pathname === "/privacy" ? "page" : undefined}>隐私政策</Button>
                             <Button href="/terms" variant="text" aria-current={pathname === "/terms" ? "page" : undefined}>使用条款</Button>
                             <Button href="/license" variant="text" aria-current={pathname === "/license" ? "page" : undefined}>开源许可</Button>
-                            <Button href="https://github.com/DESMG/Aldaris" variant="text">源代码</Button>
+                            <Button href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow" variant="text">源代码</Button>
                         </Stack>
                     </Stack>
                 </Container>

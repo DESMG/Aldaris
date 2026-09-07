@@ -52,7 +52,7 @@ export default function Content({ description, images, clearedImages = [], menti
         const { text: value, url } = match;
         text.push(...plainText(description.slice(offset, match.index), offset));
         const external = url.origin !== window.location.origin;
-        text.push(<Box key={`link-${match.index}`} component="a" href={url.href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined} sx={{ color: "primary.main" }}>{value}</Box>);
+        text.push(<Box key={`link-${match.index}`} component="a" href={url.href} target={external ? "_blank" : undefined} rel={external ? "external noopener noreferrer nofollow" : undefined} sx={{ color: "primary.main" }}>{value}</Box>);
         offset = match.index + value.length;
     }
     text.push(...plainText(description.slice(offset), offset));
