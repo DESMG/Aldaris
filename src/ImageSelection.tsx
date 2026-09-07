@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, LinearProgress, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Stack, Typography } from "@mui/material";
 import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT } from "../shared/limits";
 import { inspectImage } from "../shared/image-format";
 const supportedTypes = ["image/png", "image/jpeg"];
@@ -98,7 +98,7 @@ export default function ImageSelection({ images, onChange, disabled, retainedCou
             }} />
         </Button></Box>
         <Typography variant="caption" color="text.secondary">已选 {images.length + retainedCount}/{IMAGE_MAX_COUNT} 张，新图片合计 {(images.reduce((size, file) => size + file.size, 0) / 1024).toFixed(1)} KiB。仅支持静态 JPG、PNG，每张最多 1 MiB，可粘贴图片。图片会重新编码，清除 EXIF 等元数据；较大图片会缩小，PNG 保留透明背景。</Typography>
-        {processing && <><LinearProgress /><Typography variant="body2">正在处理图片，请稍候…</Typography></>}
+        {processing && <Typography variant="body2" role="status">正在处理图片，请稍候…</Typography>}
         {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
         {images.map((file, index) => <Box key={index}>
             <ImagePreview file={file} index={index} />

@@ -270,7 +270,7 @@ export default function App() {
                         </Box>}
                         {loading && <LinearProgress aria-label="读取登录状态" />}
                         {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{error}</Alert>}
-                        {pathname === "/license" ? <Suspense fallback={<LinearProgress aria-label="读取开源许可" />}><LicensePage /></Suspense> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={path.split("?")[1] ?? ""} />
+                        {pathname === "/license" ? <Suspense fallback={loading ? null : <LinearProgress aria-label="读取开源许可" />}><LicensePage /></Suspense> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={path.split("?")[1] ?? ""} />
                             : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
                             : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
                             : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
