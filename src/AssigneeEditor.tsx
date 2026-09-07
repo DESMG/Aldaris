@@ -6,6 +6,7 @@ import { assignmentAccountRoles, assignmentLabels, assignmentRoles } from "../sh
 import { ASSIGNEE_MAX_COUNT } from "../shared/limits";
 import UserPicker from "./UserPicker";
 import { useDraftGuard } from "./DraftGuard";
+import { confirmAction } from "./ConfirmDialog";
 
 export default function AssigneeEditor({ issue, onSaved, onCancel, saving, onSavingChange }: {
     issue: Issue;
@@ -71,8 +72,8 @@ export default function AssigneeEditor({ issue, onSaved, onCancel, saving, onSav
                 setError(`指派失败：${String(error)}`);
             } finally { onSavingChange(false); updating.current = false; }
         }}>保存指派</Button>
-        <Button variant="text" disabled={saving} onClick={() => {
-            if (dirty && !window.confirm("放弃尚未保存的负责人修改？")) return;
+        <Button variant="text" disabled={saving} onClick={async () => {
+            if (dirty && !await confirmAction("放弃尚未保存的负责人修改？")) return;
             clearGuard();
             onCancel();
         }}>取消</Button>

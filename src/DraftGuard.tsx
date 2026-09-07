@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { confirmAction } from "./ConfirmDialog";
 
 const drafts = new Set<{ current: boolean; discardText?: () => void }>();
 
@@ -19,8 +20,8 @@ function beforeUnload(event: BeforeUnloadEvent) {
     event.returnValue = "";
 }
 
-export function confirmDraftNavigation() {
-    return !hasUnsavedDrafts() || window.confirm("仍有未提交的内容。已保存的文字草稿可在本标签页恢复；图片、密码及其他未保存内容会丢失，确定离开？");
+export async function confirmDraftNavigation() {
+    return !hasUnsavedDrafts() || await confirmAction("仍有未提交的内容。已保存的文字草稿可在本标签页恢复；图片、密码及其他未保存内容会丢失，确定离开？");
 }
 
 export function useDraftGuard(dirty: boolean, discardText?: () => void) {

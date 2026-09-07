@@ -13,7 +13,7 @@ export default function Content({ description, images, clearedImages = [], menti
     const pointers = useRef(new Map<number, { x: number; y: number }>());
     const dragged = useRef(false);
     useEffect(() => {
-        for (const key of clearedImages) forgetImage(`/api/images/${key}?private=1`);
+        for (const key of clearedImages) forgetImage(`/api/images/${key}`);
         if (expandedImage !== null && clearedImages.includes(expandedImage)) setExpandedImage(null);
     }, [clearedImages, expandedImage]);
     useEffect(() => {
@@ -74,7 +74,7 @@ export default function Content({ description, images, clearedImages = [], menti
                 p: 0, background: "transparent", cursor: "zoom-in", alignSelf: "flex-start", maxWidth: "100%", touchAction: "manipulation",
                 "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
             }}>
-            <CachedImage src={`/api/images/${key}?private=1`} alt={`图片 ${index + 1}`} sx={{
+            <CachedImage src={`/api/images/${key}`} alt={`图片 ${index + 1}`} sx={{
                 display: "block", maxWidth: "100%", maxHeight: 480, objectFit: "contain",
             }} />
         </Box>)}
@@ -120,7 +120,7 @@ export default function Content({ description, images, clearedImages = [], menti
                     display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%",
                     p: 2, boxSizing: "border-box", cursor: "grab", userSelect: "none", "&:active": { cursor: "grabbing" },
                 }}>
-                    {expandedImage !== null && <CachedImage src={`/api/images/${expandedImage}?private=1`}
+                    {expandedImage !== null && <CachedImage src={`/api/images/${expandedImage}`}
                         alt={`图片 ${images.indexOf(expandedImage) + 1}`} sx={{
                             display: "block", minWidth: 0, maxWidth: "100%", maxHeight: "calc(100dvh - 32px)", objectFit: "contain",
                             transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,

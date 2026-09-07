@@ -6,6 +6,7 @@ import type { Reply } from "./api";
 import Content from "./IssueContent";
 import Description from "./Description";
 import { useDraftGuard } from "./DraftGuard";
+import { confirmAction } from "./ConfirmDialog";
 import { useTextDraft } from "./useTextDraft";
 
 export function ReplyForm({ issueId, saving, blocked, editing, onReply, onStatus, children }: {
@@ -17,7 +18,8 @@ export function ReplyForm({ issueId, saving, blocked, editing, onReply, onStatus
     onStatus: (status: "Open" | "Closed", reason: "completed" | "not_planned", replied: boolean) => Promise<void>;
     children: (hasContent: boolean, submit: (status: "Open" | "Closed", reason: "completed" | "not_planned") => Promise<void>, disabled: boolean) => ReactNode;
 }) {
-    const draft = useTextDraft(`reply.${issueId}`, { description: "", requestKey: "" });
+    const draft = useTextDraft(`reply.${issueId}`, { description: "", requestKey: "" }, value =>
+        typeof value.description === "string" && typeof value.requestKey === "string");
     const { description } = draft.value;
     const [images, setImages] = useState<File[]>([]);
     const [processing, setProcessing] = useState(false);
@@ -76,7 +78,9 @@ export function EditReplyForm({ reply, saving, onSave, onCancel }: {
     onSave: (description: string, retainedImages: string[], images: File[], version: number) => Promise<void>;
     onCancel: () => void;
 }) {
-    const draft = useTextDraft(`edit-reply.${reply.id}`, { description: reply.description, retainedImages: reply.images, version: reply.version });
+    const draft = useTextDraft(`edit-reply.${reply.id}`, { description: reply.description, retainedImages: reply.images, version: reply.version }, value =>
+        typeof value.description === "string" && Number.isSafeInteger(value.version) && (value.version as number) > 0 &&
+        Array.isArray(value.retainedImages) && value.retainedImages.every(image => typeof image === "string"));
     const { description, retainedImages, version } = draft.value;
     const [clearedImages, setClearedImages] = useState(reply.clearedImages);
     const [images, setImages] = useState<File[]>([]);
@@ -135,8 +139,8 @@ export function EditReplyForm({ reply, saving, onSave, onCancel }: {
             </Stack>)}
             <Stack direction="row" spacing={1}>
                 <Button type="submit" variant="contained" disabled={disabled}>保存</Button>
-                <Button color="inherit" disabled={saving || processing} onClick={() => {
-                    if (dirty && !window.confirm("放弃尚未保存的评论修改？")) return;
+                <Button color="inherit" disabled={saving || processing} onClick={async () => {
+                    if (dirty && !await confirmAction("放弃尚未保存的评论修改？")) return;
                     clearGuard();
                     draft.clear();
                     onCancel();

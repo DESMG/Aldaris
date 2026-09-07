@@ -3,12 +3,14 @@ import { Alert, Box, Button, MenuItem, Paper, Stack, TextField, Typography } fro
 import { api, navigate, setLoginSession, getApiSessionGeneration, assertApiSession } from "./api";
 import type { LoginSession, User } from "./api";
 import PasswordStrength from "./PasswordStrength";
+import { isPasswordBreached } from "./passwordBreach";
+import { confirmAction } from "./ConfirmDialog";
 import { useDraftGuard } from "./DraftGuard";
 import { NAME_MAX_LENGTH, USERNAME_MAX_LENGTH } from "../shared/limits";
 import { useTextDraft } from "./useTextDraft";
 
 export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
-    mode: "login" | "setup" | "create-user" | "account";
+    mode: "login" | "create-user" | "account";
     user: User | null;
     onUserChange: (user: User | null) => void;
     resumeUserId?: number;
@@ -20,14 +22,15 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
     const [strengthPassword, setStrengthPassword] = useState("");
     const [dirty, setDirty] = useState(false);
     const [role, setRole] = useState<User["role"]>("user");
-    const draft = useTextDraft(mode === "create-user" ? "create-user" : null, { name: "", username: "" });
+    const draft = useTextDraft(mode === "create-user" ? "create-user" : null, { name: "", username: "" }, value =>
+        typeof value.name === "string" && typeof value.username === "string");
     const clearGuard = useDraftGuard(mode === "create-user" && (dirty || !!draft.value.name || !!draft.value.username), draft.clear);
     const mounted = useRef(true);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
     const next = new URLSearchParams(window.location.search).get("next") ?? "/";
-    const destination = ["/account", "/admin/users", "/admin/users/new", "/operations", "/notifications"].includes(next)
+    const destination = ["/account", "/admin/users", "/admin/users/new", "/operations", "/privacy", "/terms"].includes(next)
         || /^\/issues\/\d+(?:\?reply=\d+)?$/.test(next) || /^\/(?:\?[^#]*)?$/.test(next) ? next : "/";
-    const title = mode === "setup" ? "创建管理员" : mode === "create-user" ? "创建用户" : mode === "account" ? "修改密码" : "登录";
+    const title = mode === "create-user" ? "创建用户" : mode === "account" ? "修改密码" : "登录";
 
     if (mode === "create-user" && user?.role !== "admin") {
         return <Alert severity="error">只有管理员可以创建用户。</Alert>;
@@ -59,6 +62,14 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
             setError("");
             setSuccess("");
             try {
+                if (mode !== "login") {
+                    const breached = await isPasswordBreached(password);
+                    if (!mounted.current) return;
+                    assertApiSession(apiSession);
+                    if (breached && !await confirmAction("此密码已发生泄露事件，是否允许修改？")) return;
+                    if (!mounted.current) return;
+                    assertApiSession(apiSession);
+                }
                 const endpoint = mode === "create-user" ? "/api/admin/users" : `/api/auth/${mode === "account" ? "password" : mode}`;
                 const response = await api(endpoint, { method: "POST", body, expectedSession: apiSession });
                 const data: LoginSession = await response.json();
@@ -81,7 +92,7 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
                 if (mode === "login") setLoginSession(data);
                 onUserChange(data.user);
                 if (mode === "login" && resumeUserId !== undefined) return;
-                navigate(mode === "setup" ? "/login?setupComplete=1" : mode === "account" ? "/login?passwordChanged=1" : destination);
+                navigate(mode === "account" ? "/login?passwordChanged=1" : destination);
             } catch (error) {
                 if (mounted.current) setError(String(error));
             } finally {
@@ -89,23 +100,23 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
             }
         }}>
             <Stack spacing={2}>
-                {mode !== "login" && mode !== "setup" && <Box><Button href={mode === "create-user" ? "/admin/users" : "/"} color="inherit" variant="outlined" disabled={saving}>← {mode === "create-user" ? "返回用户管理" : "返回列表"}</Button></Box>}
-                <Typography component="h1" variant="h5">{title}</Typography>
-                {mode === "setup" && <Typography color="text.secondary">首次使用，请创建管理员账户。</Typography>}
-                {mode === "setup" && <TextField name="setupCredential" label="初始化凭据" type="password" autoComplete="off" required disabled={saving} slotProps={{ htmlInput: { maxLength: 512 } }} helperText="填写部署时预先设置的 KV 初始化凭据" />}
-                {mode === "login" && new URLSearchParams(window.location.search).has("setupComplete") && <Alert severity="success">管理员已创建，请登录。</Alert>}
+                <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                    <Typography component="h1" variant="h5">{title}</Typography>
+                    {mode === "create-user" && <Button href="/admin/users" color="inherit" variant="outlined" disabled={saving}>← 返回用户管理</Button>}
+                </Stack>
                 {mode === "login" && new URLSearchParams(window.location.search).has("passwordChanged") && <Alert severity="success">密码已修改，请重新登录。</Alert>}
                 {error && <Alert severity="error">{error}</Alert>}
                 {draft.error && <Alert severity="error">{draft.error}</Alert>}
                 {success && <Alert severity="success">{success}</Alert>}
-                {(mode === "create-user" || mode === "setup") && <TextField name="name" label="昵称" autoComplete="off" value={draft.value.name} onChange={event => { draft.setValue({ ...draft.value, name: event.target.value }); event.target.setCustomValidity(Array.from(event.target.value).length > NAME_MAX_LENGTH ? "昵称最多 32 个字符。" : ""); }} required disabled={saving} slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH * 2 } }} helperText="中文真实姓名；重名用数字或减号加部门名区分，最多 32 字符" />}
+                {mode === "create-user" && <TextField name="name" label="昵称" autoComplete="off" value={draft.value.name} onChange={event => { draft.setValue({ ...draft.value, name: event.target.value }); event.target.setCustomValidity(Array.from(event.target.value).length > NAME_MAX_LENGTH ? "昵称最多 32 个字符。" : ""); }} required disabled={saving} slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH * 2 } }} helperText="中文真实姓名；重名用数字或减号加部门名区分，最多 32 字符" />}
                 {mode !== "account" && <TextField name="username" label="用户名" autoComplete="username" value={draft.value.username} onChange={event => draft.setValue({ ...draft.value, username: event.target.value })} required disabled={saving} slotProps={{ htmlInput: { maxLength: USERNAME_MAX_LENGTH, pattern: "[A-Za-z]+[0-9]*" } }} helperText={mode === "login" ? undefined : "本人姓名的英文拼音，重名在末尾加数字，最多 32 字符"} />}
                 {mode === "create-user" && <Typography variant="caption" color="text.secondary">用户名和昵称在本标签页自动保存；密码需重新填写。</Typography>}
                 {mode === "create-user" && <TextField select name="role" label="账户角色" value={role} onChange={event => { setRole(event.target.value as User["role"]); setDirty(true); }} disabled={saving} helperText="产品、开发使用管理员；测试、投放使用用户。"><MenuItem value="user">用户</MenuItem><MenuItem value="admin">管理员</MenuItem></TextField>}
-                <TextField name="password" onChange={event => { if (mode !== "account") setStrengthPassword(event.target.value); }} label={mode === "account" ? "当前密码" : "密码"} type="password" autoComplete={mode === "create-user" || mode === "setup" ? "new-password" : "current-password"} required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} helperText={mode === "create-user" || mode === "setup" ? "6–128 个字符" : undefined} />
-                {mode === "account" && <TextField name="newPassword" onChange={event => setStrengthPassword(event.target.value)} label="新密码" type="password" autoComplete="new-password" required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} helperText="6–128 个字符" />}
-                {mode !== "login" && <PasswordStrength password={strengthPassword} />}
+                <TextField name="password" onChange={event => { if (mode !== "account") setStrengthPassword(event.target.value); }} label={mode === "account" ? "当前密码" : "密码"} type="password" autoComplete={mode === "create-user" ? "new-password" : "current-password"} required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} />
+                {mode === "account" && <TextField name="newPassword" onChange={event => setStrengthPassword(event.target.value)} label="新密码" type="password" autoComplete="new-password" required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} />}
                 {mode !== "login" && <TextField name="confirmPassword" label="确认密码" type="password" autoComplete="new-password" required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} />}
+                {mode !== "login" && <Typography variant="caption" color="text.secondary">密码长度为 6–128 个字符</Typography>}
+                {mode !== "login" && <PasswordStrength password={strengthPassword} />}
                 <Button type="submit" variant="contained" disabled={saving}>{saving ? "处理中…" : mode === "account" ? "修改密码" : title}</Button>
             </Stack>
         </Box>

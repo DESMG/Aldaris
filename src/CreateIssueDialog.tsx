@@ -3,12 +3,14 @@ import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogT
 import { api, assertApiSession, getApiSessionGeneration, navigate } from "./api";
 import Description from "./Description";
 import { useDraftGuard } from "./DraftGuard";
+import { confirmAction } from "./ConfirmDialog";
 import { TITLE_MAX_LENGTH } from "../shared/limits";
 import { useTextDraft } from "./useTextDraft";
 
 export default function CreateIssueDialog({ onClose }: { onClose: () => void }) {
     const apiSession = getApiSessionGeneration();
-    const draft = useTextDraft("create-issue", { title: "", description: "", requestKey: "" });
+    const draft = useTextDraft("create-issue", { title: "", description: "", requestKey: "" }, value =>
+        typeof value.title === "string" && typeof value.description === "string" && typeof value.requestKey === "string");
     const { title, description } = draft.value;
     const [images, setImages] = useState<File[]>([]);
     const [saving, setSaving] = useState(false);
@@ -23,8 +25,8 @@ export default function CreateIssueDialog({ onClose }: { onClose: () => void }) 
     const submission = useRef<{ title: string; description: string; images: File[]; key: string } | null>(null);
     const dirty = !!title || !!description || images.length > 0 || processing;
     const clearGuard = useDraftGuard(dirty, draft.clear);
-    function close() {
-        if (saving || processing || (dirty && !window.confirm("放弃尚未创建的工单内容？"))) return;
+    async function close() {
+        if (saving || processing || (dirty && !await confirmAction("放弃尚未创建的工单内容？"))) return;
         clearGuard();
         draft.clear();
         onClose();

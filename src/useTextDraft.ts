@@ -2,18 +2,38 @@ import { useRef, useState } from "react";
 import { getLoginSession } from "./api";
 
 // Callers supply only text and the identifiers needed to submit it safely.
-export function useTextDraft<T extends object>(scope: string | null, initial: T) {
+export function useTextDraft<T extends object>(scope: string | null, initial: T, validate: (value: Record<string, unknown>) => boolean) {
     const [key] = useState(() => {
         if (!scope) return null;
         const owner = getLoginSession()?.user.id;
         return owner ? `aldaris.draft.${owner}.${scope}` : null;
     });
     const [draft, setDraft] = useState<{ value: T; revision: string | null; error: string }>(() => {
+        let saved: string | null;
         try {
-            const saved = key ? sessionStorage.getItem(key) : null;
-            return saved === null ? { value: initial, revision: null, error: "" } : { ...JSON.parse(saved), error: "" };
+            saved = key ? sessionStorage.getItem(key) : null;
         } catch (error) {
             return { value: initial, revision: null, error: `读取文字草稿失败：${String(error)}` };
+        }
+        if (saved === null) return { value: initial, revision: null, error: "" };
+        try {
+            const parsed = JSON.parse(saved);
+            if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed) ||
+                Object.keys(parsed).length !== 2 || typeof parsed.revision !== "string" ||
+                !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(parsed.revision) ||
+                parsed.value === null || typeof parsed.value !== "object" || Array.isArray(parsed.value) ||
+                Object.keys(parsed.value).length !== Object.keys(initial).length ||
+                !Object.keys(initial).every(field => Object.hasOwn(parsed.value, field)) || !validate(parsed.value)) {
+                throw new Error("草稿结构与当前表单不兼容");
+            }
+            return { value: parsed.value as T, revision: parsed.revision, error: "" };
+        } catch {
+            try {
+                sessionStorage.removeItem(key!);
+                return { value: initial, revision: null, error: "" };
+            } catch (error) {
+                return { value: initial, revision: null, error: `文字草稿格式无效，无法恢复；删除失败：${String(error)}` };
+            }
         }
     });
     const revision = useRef(draft.revision);

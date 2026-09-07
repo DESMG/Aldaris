@@ -108,7 +108,6 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
         return () => { document.title = previous; };
     }, [issue?.title]);
     return <Stack spacing={3}>
-        <Box><Button color="inherit" variant="outlined" href="/">← 返回列表</Button></Box>
         {(loading || detailLoading) && <LinearProgress aria-label="正在加载详情" />}
         {detailError && <Alert severity="error" action={<Button color="inherit" onClick={() => setDetailRefresh(value => value + 1)}>重试</Button>}>{detailError}</Alert>}
         {loadError && <Alert severity="error" action={<Button color="inherit" disabled={editing !== null} onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{loadError}</Alert>}

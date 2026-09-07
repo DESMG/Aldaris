@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
     Alert, Box, Button, Chip,
-    LinearProgress, Pagination, Paper, Stack, Tab, Tabs, TextField, Typography,
+    LinearProgress, Pagination, Paper, Stack, Tab, Tabs, Typography,
 } from "@mui/material";
 
 import { cachedJson, getCachedJson, navigate } from "./api";
@@ -9,19 +9,18 @@ import type { IssueSummary, User } from "./api";
 import CreateIssueDialog from "./CreateIssueDialog";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
 
-type IssuesView = { search: string; querySearch: string; status: "Open" | "Closed"; page: number };
+type IssuesView = { status: "Open" | "Closed"; page: number };
 function readView(): IssuesView {
     const params = new URLSearchParams(window.location.search);
-    const search = params.get("search") ?? "";
     const page = Number(params.get("page") ?? "1");
-    return { search, querySearch: search.trim(), status: params.get("status") === "Closed" ? "Closed" : "Open", page: Number.isSafeInteger(page) && page > 0 ? page : 1 };
+    return { status: params.get("status") === "Closed" ? "Closed" : "Open", page: Number.isSafeInteger(page) && page > 0 ? page : 1 };
 }
 type IssuesData = { issues: IssueSummary[]; counts: { Open: number; Closed: number } };
 
 export default function Issues({ user, locationSearch }: { user: User | null; locationSearch: string }) {
     const [view, setView] = useState(readView);
-    const { search, querySearch, status, page } = view;
-    const url = `/api/issues?${new URLSearchParams({ status, page: String(page), search: querySearch })}`;
+    const { status, page } = view;
+    const url = `/api/issues?${new URLSearchParams({ status, page: String(page) })}`;
     const cached = getCachedJson<IssuesData>(url);
     const [issues, setIssues] = useState<IssueSummary[]>(() => cached?.issues ?? []);
     const [counts, setCounts] = useState(() => cached?.counts ?? { Open: 0, Closed: 0 });
@@ -35,26 +34,17 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
     useEffect(() => {
         const params = new URLSearchParams();
         if (status !== "Open") params.set("status", status);
-        if (querySearch) params.set("search", querySearch);
         if (page > 1) params.set("page", String(page));
         const query = params.toString();
         const next = "/" + (query ? `?${query}` : "");
         if (window.location.pathname === "/" && next !== window.location.pathname + window.location.search) {
-            if (!navigate(next)) setView(readView());
+            void navigate(next).then(confirmed => { if (!confirmed) setView(readView()); });
         }
-    }, [status, querySearch, page]);
+    }, [status, page]);
 
     useEffect(() => {
         setView(readView());
     }, [locationSearch]);
-
-    useEffect(() => {
-        if (search.trim() === querySearch) return;
-        const timer = window.setTimeout(() => {
-            setView(current => ({ ...current, querySearch: search.trim(), page: 1 }));
-        }, 300);
-        return () => window.clearTimeout(timer);
-    }, [search, querySearch, setView]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -83,15 +73,6 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
         <Stack spacing={3}>
             <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 3 }}>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <TextField
-                    label="搜索标题"
-                    value={search}
-                    onChange={(event) => {
-                        setView(current => ({ ...current, search: event.target.value }));
-                    }}
-                    fullWidth
-                    size="small"
-                />
                 <Button variant="contained" sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none" }} onClick={() => {
                     if (!user) { navigate("/login"); return; }
                     setError("");
@@ -119,7 +100,7 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
             {!loading && !error && issues.length === 0 && (
                 <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
                     <Typography>
-                        {search.trim() ? "没有符合搜索条件的工单。" : `暂无${status === "Open" ? "未关闭" : "已关闭"}的工单。`}
+                        {`暂无${status === "Open" ? "未关闭" : "已关闭"}的工单。`}
                     </Typography>
                 </Paper>
             )}

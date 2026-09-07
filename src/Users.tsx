@@ -4,6 +4,8 @@ import { api, ApiError, cachedJson, getCachedJson, navigate, getApiSessionGenera
 import type { User } from "./api";
 import type { ManagedUser } from "../shared/types";
 import PasswordStrength from "./PasswordStrength";
+import { isPasswordBreached } from "./passwordBreach";
+import { confirmAction } from "./ConfirmDialog";
 import { useDraftGuard } from "./DraftGuard";
 import { NAME_MAX_LENGTH, USERNAME_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from "../shared/limits";
 import { useTextDraft } from "./useTextDraft";
@@ -14,7 +16,10 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     const [after, setAfter] = useState(0);
     const [next, setNext] = useState<number | null>(cached?.next ?? null);
     const [password, setPassword] = useState("");
-    const draft = useTextDraft("edit-user", { id: 0, version: 0, name: "", username: "" });
+    const draft = useTextDraft("edit-user", { id: 0, version: 0, name: "", username: "" }, value =>
+        Number.isSafeInteger(value.id) && (value.id as number) >= 0 &&
+        Number.isSafeInteger(value.version) && (value.version as number) >= 0 &&
+        typeof value.name === "string" && typeof value.username === "string");
     const { name: editName, username: editUsername } = draft.value;
     const [confirmPassword, setConfirmPassword] = useState("");
     const [users, setUsers] = useState<ManagedUser[]>(() => cached?.users ?? []);
@@ -35,9 +40,11 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     const listEnd = useRef<HTMLDivElement>(null);
     const dirty = editOpen && editing !== null && (conflict || editName !== editing.name || editUsername !== editing.username || password !== "" || confirmPassword !== "");
     const clearGuard = useDraftGuard(dirty, draft.clear);
+    const mounted = useRef(true);
+    useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
-    function closeEditor() {
-        if (saving || reloading || (dirty && !window.confirm("放弃尚未保存的用户资料修改？"))) return;
+    async function closeEditor() {
+        if (saving || reloading || (dirty && !await confirmAction("放弃尚未保存的用户资料修改？"))) return;
         clearGuard();
         draft.clear();
         setEditOpen(false);
@@ -95,11 +102,10 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     if (user.role !== "admin") return <Alert severity="error">只有管理员可以管理用户。</Alert>;
 
     return <Stack spacing={3}>
-        <Stack direction="row" spacing={2}>
-            <Button href="/" color="inherit">← 返回列表</Button>
+        <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+            <Typography component="h1" variant="h5">用户管理</Typography>
             <Button href="/admin/users/new" variant="contained">创建用户</Button>
         </Stack>
-        <Typography component="h1" variant="h5">用户管理</Typography>
         {draft.error && <Alert severity="error">{draft.error}</Alert>}
         {loading && users.length === 0 && <Typography role="status">正在读取用户…</Typography>}
         <Dialog open={editOpen} onClose={closeEditor} fullWidth maxWidth="xs" aria-labelledby="edit-user-title" transitionDuration={reducedMotion ? 0 : 440} slotProps={{ transition: { onExited: () => { setEditing(null); setPassword(""); setConfirmPassword(""); } }, paper: { sx: { p: { xs: 3, sm: 4 }, maxWidth: 440 } } }}>
@@ -112,6 +118,15 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                 setSaving(true);
                 setError("");
                 try {
+                    const newPassword = String(body.get("password") ?? "");
+                    if (newPassword) {
+                        const breached = await isPasswordBreached(newPassword);
+                        if (!mounted.current) return;
+                        assertApiSession(apiSession);
+                        if (breached && !await confirmAction("此密码已发生泄露事件，是否允许修改？")) return;
+                        if (!mounted.current) return;
+                        assertApiSession(apiSession);
+                    }
                     const response = await api(`/api/admin/users/${editing.id}`, { method: "PATCH", headers: { "If-Match": `"${editing.version}"` }, body, expectedSession: apiSession });
                     const data: { user: ManagedUser } = await response.json();
                     assertApiSession(apiSession);
@@ -163,8 +178,9 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                     <TextField name="username" label="用户名" value={editUsername} onChange={event => draft.setValue({ ...draft.value, username: event.target.value })} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: USERNAME_MAX_LENGTH, pattern: "[A-Za-z]+[0-9]*" } }} helperText="本人姓名的英文拼音，重名在末尾加数字，最多 32 字符" />
                     <Typography variant="caption" color="text.secondary">用户名和昵称在本标签页自动保存；密码需重新填写。</Typography>
                     <TextField name="password" value={password} onChange={event => setPassword(event.target.value)} label="新密码" type="password" autoComplete="new-password" helperText="留空则保留原密码" disabled={saving || reloading} slotProps={{ htmlInput: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } }} />
-                    <PasswordStrength password={password} />
                     <TextField name="confirmPassword" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} label="确认新密码" type="password" autoComplete="new-password" disabled={saving || reloading} slotProps={{ htmlInput: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } }} />
+                    <Typography variant="caption" color="text.secondary">密码长度为 {PASSWORD_MIN_LENGTH}–{PASSWORD_MAX_LENGTH} 个字符</Typography>
+                    <PasswordStrength password={password} />
                     <Button type="submit" variant="contained" disabled={saving || conflict || reloading}>{saving ? "处理中…" : "保存修改"}</Button>
                 </Stack>
             </Box>}

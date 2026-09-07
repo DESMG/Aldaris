@@ -9,6 +9,6 @@ export default function PasswordStrength({ password }: { password: string }) {
     const color = score < 1 ? "error" : score < 2 ? "warning" : "success";
     return <Stack spacing={0.5}>
         <LinearProgress variant="determinate" value={(score + 1) * 25} color={color} />
-        <Typography variant="caption" color="text.secondary">密码强度：{label} (仅按长度与字符组合估计，不拦截弱密码)</Typography>
+        <Typography variant="caption" color="text.secondary">密码强度：{label}</Typography>
     </Stack>;
 }

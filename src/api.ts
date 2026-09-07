@@ -1,15 +1,12 @@
 export type { User, Member, Assignee, Issue, IssueSummary, Reply, TimelineEntry, LoginSession } from "../shared/types";
 import type { LoginSession } from "../shared/types";
-import { confirmDraftNavigation } from "./DraftGuard";
+import { confirmDraftNavigation, hasUnsavedDrafts } from "./DraftGuard";
 
 const jsonCache = new Map<string, { data: unknown; expiresAt: number }>();
 const pendingJson = new Map<string, Promise<unknown>>();
-const imageCache = new Map<string, { blob: Blob; expiresAt: number }>();
 const pendingImages = new Map<string, Promise<Blob>>();
 const sessionListeners = new Set<() => void>();
-let imageCacheBytes = 0;
 let cacheGeneration = 0;
-let imageCacheGeneration = 0;
 let sessionGeneration = 0;
 
 export function subscribeApiSession(listener: () => void) {
@@ -27,17 +24,14 @@ export function clearApiCache() {
     pendingJson.clear();
 }
 
-function clearImageCache() {
-    imageCacheGeneration++;
-    imageCache.clear();
+function clearImageRequests() {
     pendingImages.clear();
-    imageCacheBytes = 0;
 }
 
 export function resetApiSession() {
     sessionGeneration++;
     clearApiCache();
-    clearImageCache();
+    clearImageRequests();
     for (const listener of sessionListeners) listener();
 }
 
@@ -70,7 +64,7 @@ export function cachedJson<T>(url: string, { refresh = false }: { refresh?: bool
             if (cached.expiresAt <= Date.now()) jsonCache.delete(key);
         }
         if (jsonCache.size >= 50) jsonCache.delete(jsonCache.keys().next().value!);
-        jsonCache.set(url, { data, expiresAt: Date.now() + 30_000 });
+        jsonCache.set(url, { data, expiresAt: Date.now() + 5_000 });
         return data;
     }).finally(() => {
         if (pendingJson.get(url) === request) pendingJson.delete(url);
@@ -80,36 +74,12 @@ export function cachedJson<T>(url: string, { refresh = false }: { refresh?: bool
 }
 
 export function cachedImage(url: string, { refresh = false }: { refresh?: boolean } = {}): Promise<Blob> {
-    if (refresh) {
-        const previous = imageCache.get(url);
-        if (previous) imageCacheBytes -= previous.blob.size;
-        imageCache.delete(url);
-        pendingImages.delete(url);
-    }
-    for (const [key, cached] of imageCache) {
-        if (cached.expiresAt <= Date.now()) {
-            imageCacheBytes -= cached.blob.size;
-            imageCache.delete(key);
-        }
-    }
-    const cached = imageCache.get(url);
-    if (cached) return Promise.resolve(cached.blob);
+    if (refresh) pendingImages.delete(url);
     const pending = pendingImages.get(url);
     if (pending) return pending;
-    const generation = imageCacheGeneration;
     const session = sessionGeneration;
     const request = api(url).then(response => response.blob()).then(blob => {
         if (session !== sessionGeneration) throw new DOMException(`读取图片 ${url} 的登录状态已变更`, "AbortError");
-        if (generation !== imageCacheGeneration || pendingImages.get(url) !== request) return blob;
-        if (blob.size <= 10 * 1024 * 1024) {
-            while (imageCache.size > 0 && (imageCacheBytes + blob.size > 50 * 1024 * 1024 || imageCache.size >= 50)) {
-                const key = imageCache.keys().next().value!;
-                imageCacheBytes -= imageCache.get(key)!.blob.size;
-                imageCache.delete(key);
-            }
-            imageCache.set(url, { blob, expiresAt: Date.now() + 30_000 });
-            imageCacheBytes += blob.size;
-        }
         return blob;
     }).finally(() => {
         if (pendingImages.get(url) === request) pendingImages.delete(url);
@@ -119,9 +89,6 @@ export function cachedImage(url: string, { refresh = false }: { refresh?: boolea
 }
 
 export function forgetImage(url: string) {
-    const cached = imageCache.get(url);
-    if (cached) imageCacheBytes -= cached.blob.size;
-    imageCache.delete(url);
     pendingImages.delete(url);
 }
 
@@ -190,7 +157,7 @@ export async function api(url: string, options?: RequestInit & { expectedSession
     const headers = new Headers(options?.headers);
     if (login) headers.set("Authorization", `Bearer ${login.token}`);
     const timeout = new AbortController();
-    const timer = window.setTimeout(() => timeout.abort(new DOMException("请求超时，请重试。", "TimeoutError")), mutation ? 120_000 : 30_000);
+    const timer = window.setTimeout(() => timeout.abort(new DOMException("请求超时，请重试。", "TimeoutError")), 10_000);
     const signal = options?.signal ? AbortSignal.any([options.signal, timeout.signal]) : timeout.signal;
     let response: Response;
     let payload: Blob;
@@ -218,15 +185,19 @@ export async function api(url: string, options?: RequestInit & { expectedSession
     }
     if (mutation) {
         clearApiCache();
-        if (["PATCH", "DELETE"].includes(method) && /^\/api\/replies\/\d+$/.test(url)) clearImageCache();
+        if (["PATCH", "DELETE"].includes(method) && /^\/api\/replies\/\d+$/.test(url)) clearImageRequests();
     }
     return new Response(response.status === 204 || response.status === 205 || response.status === 304 ? null : payload, {
         status: response.status, statusText: response.statusText, headers: response.headers,
     });
 }
 
-export function navigate(path: string) {
-    if (!confirmDraftNavigation()) return false;
+export async function navigate(path: string) {
+    if (hasUnsavedDrafts()) {
+        const startingUrl = window.location.href;
+        const startingSession = sessionGeneration;
+        if (!await confirmDraftNavigation() || window.location.href !== startingUrl || sessionGeneration !== startingSession) return false;
+    }
     const index = (window.history.state?.aldarisIndex ?? 0) + 1;
     window.history.pushState({ aldarisIndex: index }, "", path);
     window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
