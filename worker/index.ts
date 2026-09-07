@@ -49,7 +49,13 @@ async function route(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     if (!["GET", "HEAD"].includes(request.method) && request.headers.get("Origin") !== url.origin) throw new HttpError(403, "请求来源无效。");
     const publicAction = url.pathname === "/api/auth/login" && request.method === "POST";
-    const user = publicAction ? null : await currentUser(request, env);
+    let user;
+    try {
+        user = await currentUser(request, env);
+    } catch (error) {
+        if (!publicAction || !(error instanceof HttpError) || error.status !== 401) throw error;
+        user = null;
+    }
     env.signal?.throwIfAborted();
     if (publicAction || url.pathname === "/api/auth/me" || url.pathname.startsWith("/api/auth/") || url.pathname === "/api/operations" || url.pathname.startsWith("/api/admin/")) return auth(request, env, user);
     if (!user) throw new HttpError(401, "请先登录。");

@@ -28,7 +28,7 @@ export async function auth(request: Request, env: Env, user: User | null) {
     const password = String(form.get("password") ?? "");
     if (username.length > USERNAME_MAX_LENGTH || !USERNAME_PATTERN.test(username) || !passwordValid(password)) throw new HttpError(400, "请输入有效用户名和 6–128 个字符的密码。");
     const ip = request.headers.get("CF-Connecting-IP");
-    if (path === "/api/auth/login" && ip) {
+    if (path === "/api/auth/login" && !user && ip) {
         const now = Date.now();
         const ipHash = hash(`ip:${ip}`);
         const removeExpired = env.DB.prepare("DELETE FROM auth_attempts WHERE attemptedAt <= ?").bind(now - LOGIN_WINDOW_MS);
@@ -83,5 +83,9 @@ export async function auth(request: Request, env: Env, user: User | null) {
     if (!confirmed) throw new HttpError(401, "账户已发生变化，请重新登录。");
     env.signal?.throwIfAborted();
     const token = await issueToken(request, env, account);
+    if (ip) {
+        env.signal?.throwIfAborted();
+        await env.DB.prepare("DELETE FROM auth_attempts WHERE ipHash = ?").bind(hash(`ip:${ip}`)).run();
+    }
     return Response.json({ ...token, user: confirmed });
 }
