@@ -13,7 +13,7 @@ INSERT INTO users (username, name, passwordHash, role, createdAt)
 VALUES (
     'admin',
     '管理员',
-    '$100000$9904aee505c2df5c4d567b5a8d05c74b8dd10baf2f885f172f5d7958815859df$d83c06c57797eaf27d759c9a2e0fc879$',
+    '$100000$1dc7d01311ff3f9ffec240b2090fafcd28e7357a40e4e155312b6addbaadb55a$ada460b283aff9ed4bc8293631323c90$',
     'admin',
     strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 );
