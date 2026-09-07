@@ -34,13 +34,7 @@ export type TimelineEntry = (Reply & { kind: "reply" })
     | (Event & { kind: "reply_edited" | "reply_deleted"; details: { replyId: number } })
     | (Event & { kind: "assignment"; details: { before: AssignmentSnapshot[]; after: AssignmentSnapshot[] } });
 export type LoginSession = { token: string; user: User; expiresAt: number };
-export type Notification = {
-    id: number; issueId: number; replyId: number | null; issueTitle: string; actorName: string;
-    kind: "mention" | "assignment"; assignmentRole: AssignmentRole | null;
-    createdAt: string; readAt: string | null;
-};
-export type NotificationsPage = { notifications: Notification[]; next: number | null };
-export type OperationAction = "user_created" | "user_updated" | "user_deleted" | "password_reset" | "setup"
+export type OperationAction = "user_created" | "user_updated" | "user_deleted" | "password_reset"
     | "issue_created" | "reply_created" | "reply_edited" | "reply_deleted" | "issue_status" | "issue_priority" | "issue_assignees";
 export type OperationEvent = {
     id: number; actorId: number; actorName: string; targetId: number | null;

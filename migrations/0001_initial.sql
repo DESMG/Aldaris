@@ -3,7 +3,6 @@ CREATE TABLE users (
     username TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     passwordHash TEXT NOT NULL,
-    passwordSalt TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
     credentialVersion INTEGER NOT NULL DEFAULT 1,
     profileVersion INTEGER NOT NULL DEFAULT 1,
@@ -26,34 +25,6 @@ CREATE TABLE issues (
     createdAt TEXT NOT NULL
 );
 CREATE INDEX issues_status_id ON issues (status, id DESC);
-CREATE INDEX issues_search_nul ON issues (id) WHERE instr(title, char(0)) > 0;
-
-CREATE TABLE issue_search_terms (
-    term TEXT NOT NULL,
-    issueId INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-    PRIMARY KEY (term, issueId)
-) WITHOUT ROWID;
-CREATE INDEX issue_search_terms_issue ON issue_search_terms (issueId);
-
-CREATE TRIGGER issues_search_insert AFTER INSERT ON issues BEGIN
-    INSERT OR IGNORE INTO issue_search_terms (term, issueId)
-    SELECT substr(lower(NEW.title), n, 2), NEW.id FROM (
-        WITH RECURSIVE positions(n) AS (
-            SELECT 1 WHERE length(NEW.title) >= 2
-            UNION ALL SELECT n + 1 FROM positions WHERE n + 1 < length(NEW.title)
-        ) SELECT n FROM positions
-    );
-END;
-CREATE TRIGGER issues_search_update AFTER UPDATE OF title ON issues BEGIN
-    DELETE FROM issue_search_terms WHERE issueId = NEW.id;
-    INSERT OR IGNORE INTO issue_search_terms (term, issueId)
-    SELECT substr(lower(NEW.title), n, 2), NEW.id FROM (
-        WITH RECURSIVE positions(n) AS (
-            SELECT 1 WHERE length(NEW.title) >= 2
-            UNION ALL SELECT n + 1 FROM positions WHERE n + 1 < length(NEW.title)
-        ) SELECT n FROM positions
-    );
-END;
 
 CREATE TABLE replies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,7 +52,7 @@ CREATE TABLE events (
     actorId INTEGER REFERENCES users(id),
     targetId INTEGER REFERENCES users(id),
     issueId INTEGER REFERENCES issues(id) ON DELETE CASCADE,
-    action TEXT NOT NULL CHECK (action IN ('setup', 'user_created', 'user_updated', 'user_deleted', 'password_reset',
+    action TEXT NOT NULL CHECK (action IN ('user_created', 'user_updated', 'user_deleted', 'password_reset',
         'issue_created', 'reply_created', 'reply_edited', 'reply_deleted', 'issue_status', 'issue_priority', 'issue_assignees')),
     details TEXT NOT NULL CHECK (json_valid(details)),
     createdAt TEXT NOT NULL,
@@ -91,22 +62,6 @@ CREATE TABLE events (
 );
 CREATE INDEX events_issue_time ON events (issueId, createdAt, id) WHERE channel = 'timeline';
 CREATE INDEX events_operations ON events (id DESC) WHERE channel = 'operation';
-
-CREATE TABLE notifications (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    actorId INTEGER NOT NULL REFERENCES users(id),
-    issueId INTEGER NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
-    replyId INTEGER REFERENCES replies(id) ON DELETE SET NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('mention', 'assignment')),
-    source TEXT NOT NULL,
-    assignmentRole TEXT CHECK (assignmentRole IN ('product', 'development', 'testing')),
-    createdAt TEXT NOT NULL,
-    readAt TEXT,
-    UNIQUE (userId, kind, source)
-);
-CREATE INDEX notifications_user ON notifications (userId, id DESC);
-CREATE INDEX notifications_unread ON notifications (userId, id DESC) WHERE readAt IS NULL;
 
 CREATE TABLE image_capacity (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -153,20 +108,22 @@ CREATE TRIGGER images_delete_guard BEFORE DELETE ON images WHEN OLD.state != 'de
 END;
 
 CREATE TABLE auth_attempts (
-    id TEXT PRIMARY KEY,
-    scope TEXT NOT NULL CHECK (scope IN ('account', 'network')),
-    subjectHash TEXT,
-    attemptedAt INTEGER,
-    attempts INTEGER,
-    expiresAt INTEGER,
-    CHECK ((scope = 'account' AND subjectHash IS NOT NULL AND attemptedAt IS NOT NULL
-            AND attempts IS NULL AND expiresAt IS NULL)
-        OR (scope = 'network' AND attempts IS NOT NULL AND expiresAt IS NOT NULL
-            AND subjectHash IS NULL AND attemptedAt IS NULL))
+    id INTEGER PRIMARY KEY,
+    ipHash TEXT NOT NULL,
+    attemptedAt INTEGER NOT NULL
 );
-CREATE INDEX auth_attempts_account_time ON auth_attempts (subjectHash, attemptedAt) WHERE scope = 'account';
-CREATE INDEX auth_attempts_account_expiry ON auth_attempts (attemptedAt) WHERE scope = 'account';
-CREATE INDEX auth_attempts_network_expiry ON auth_attempts (expiresAt) WHERE scope = 'network';
+CREATE INDEX auth_attempts_ip_time ON auth_attempts (ipHash, attemptedAt);
+CREATE INDEX auth_attempts_expiry ON auth_attempts (attemptedAt);
+
+CREATE TABLE sessions (
+    userId INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    sid TEXT NOT NULL,
+    expiresAt INTEGER NOT NULL
+);
+CREATE TRIGGER users_revoke_session AFTER UPDATE OF credentialVersion ON users
+    WHEN NEW.credentialVersion != OLD.credentialVersion BEGIN
+    DELETE FROM sessions WHERE userId = NEW.id;
+END;
 
 CREATE TABLE mutation_requests (
     userId INTEGER NOT NULL REFERENCES users(id),

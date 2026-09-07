@@ -10,6 +10,7 @@ import { rollbackImages } from "./image-cleanup";
 import { timeline } from "./timeline";
 import { createHash } from "node:crypto";
 import { recordOperation } from "./operation-record";
+import { sendNotification } from "./notifications";
 
 type IssueRow = Omit<import("../shared/types").Issue, "images" | "clearedImages" | "assignees" | "mentions"> & { images: string; clearedImages: string; assignees: string; mentions: string };
 
@@ -32,22 +33,13 @@ export async function issues(request: Request, env: Env, user: User) {
     if (url.pathname === "/api/issues" && request.method === "GET") {
         const status = url.searchParams.get("status") ?? "Open";
         const page = Number(url.searchParams.get("page") ?? "1");
-        const search = (url.searchParams.get("search") ?? "").trim();
         if (!["Open", "Closed"].includes(status) || !Number.isSafeInteger(page) || page < 1 || page > 1000000) {
             return Response.json({ error: "获取工单列表：状态或页码无效。" }, { status: 400 });
         }
 
-        const searchCharacters = Array.from(search.replace(/[A-Z]/g, letter => letter.toLowerCase()));
-        const searchTerm = searchCharacters.slice(0, 2).join("");
-        const indexed = searchCharacters.length >= 2;
-        // SQLite length/substr stop at NUL; keep these titles in the candidate set.
-        const candidateFilter = indexed ? ` AND issues.id IN (
-            SELECT issueId FROM issue_search_terms WHERE term = ?
-            UNION SELECT id FROM issues WHERE instr(title, char(0)) > 0
-        )` : "";
-        const searchBindings = indexed ? [search, searchTerm] : [search];
+        env.signal?.throwIfAborted();
         const [counts, rows] = await env.DB.batch([
-            env.DB.prepare("SELECT status, COUNT(*) AS total FROM issues WHERE instr(lower(title), lower(?)) > 0" + candidateFilter + " GROUP BY status").bind(...searchBindings),
+            env.DB.prepare("SELECT status, COUNT(*) AS total FROM issues GROUP BY status"),
             env.DB.prepare(`
                 SELECT issues.id, issues.title, issues.priority, issues.status,
                     issues.stateReason, issues.createdAt, users.name AS authorName,
@@ -64,10 +56,9 @@ export async function issues(request: Request, env: Env, user: User) {
                 FROM issues
                 LEFT JOIN users ON users.id = issues.authorId
                 WHERE status = ?
-                    AND instr(lower(title), lower(?)) > 0 ${candidateFilter}
                 ORDER BY issues.id DESC LIMIT 10 OFFSET ?
             `)
-                .bind(status, ...searchBindings, (page - 1) * 10),
+                .bind(status, (page - 1) * 10),
         ]);
         const totals = { Open: 0, Closed: 0 };
         for (const row of counts.results as { status: "Open" | "Closed"; total: number }[]) {
@@ -79,6 +70,7 @@ export async function issues(request: Request, env: Env, user: User) {
 
     const detailMatch = url.pathname.match(/^\/api\/issues\/(\d+)$/);
     if (detailMatch && request.method === "GET") {
+        env.signal?.throwIfAborted();
         const issue = await env.DB.prepare(`
                 SELECT issues.id, issues.title, issues.description,
                     ${mentionDetails("issues.mentions")} AS mentions,
@@ -112,6 +104,7 @@ export async function issues(request: Request, env: Env, user: User) {
     const replyMatch = url.pathname.match(/^\/api\/issues\/(\d+)\/replies$/);
     const singleReply = url.pathname.match(/^\/api\/replies\/(\d+)$/);
     if (singleReply && request.method === "GET") {
+        env.signal?.throwIfAborted();
         const reply = await env.DB.prepare(`
             SELECT replies.id, replies.version, replies.authorId, users.name AS authorName,
                 replies.description, replies.createdAt,
@@ -127,9 +120,11 @@ export async function issues(request: Request, env: Env, user: User) {
 
     if ((url.pathname === "/api/issues" || replyMatch) && request.method === "POST") {
         if (replyMatch) {
+            env.signal?.throwIfAborted();
             const issue = await env.DB.prepare("SELECT id FROM issues WHERE id = ?").bind(replyMatch[1]).first();
             if (!issue) return Response.json({ error: "回复失败：未找到该工单。" }, { status: 404 });
         }
+        env.signal?.throwIfAborted();
         const form = await readForm(request, UPLOAD_BODY_MAX_BYTES);
         const title = String(form.get("title") ?? "").trim();
         const description = String(form.get("description") ?? "");
@@ -139,6 +134,7 @@ export async function issues(request: Request, env: Env, user: User) {
         if (!replyMatch && form.getAll("priority").some(value => value !== "Low")) {
             return Response.json({ error: "创建工单：新建时优先级固定为低。" }, { status: 400 });
         }
+        env.signal?.throwIfAborted();
         const images = await readImages(form);
         if (!replyMatch && (!title || title.length > TITLE_MAX_LENGTH)) {
             return Response.json({ error: "创建工单：标题不能为空且最多 200 个字符。" }, { status: 400 });
@@ -153,6 +149,7 @@ export async function issues(request: Request, env: Env, user: User) {
             fingerprintHash.update(file.contentType).update(String(file.bytes.length)).update(file.bytes);
         }
         const fingerprint = fingerprintHash.digest("hex");
+        env.signal?.throwIfAborted();
         const previous = await env.DB.prepare("SELECT route, fingerprint, resourceId FROM mutation_requests WHERE userId = ? AND requestKey = ?")
             .bind(user.id, requestKey).first<{ route: string; fingerprint: string; resourceId: number }>();
         if (previous) {
@@ -165,7 +162,10 @@ export async function issues(request: Request, env: Env, user: User) {
         let committed = false;
         let commitAttempted = false;
         try {
-            keys = await uploadImages(env, images);
+            env.signal?.throwIfAborted();
+            const upload = uploadImages(env, images);
+            env.waitUntil?.(upload.catch(error => { if (error !== env.signal?.reason) throw error; }));
+            keys = await upload;
             const availableUploads = `(SELECT COUNT(*) FROM images WHERE state = 'uploaded'
                 AND key IN (SELECT value FROM json_each(?))) = ?`;
             const createdAt = new Date().toISOString();
@@ -177,21 +177,6 @@ export async function issues(request: Request, env: Env, user: User) {
                 : env.DB.prepare(`INSERT INTO issues (title, description, mentions, priority, creationToken, createdAt, authorId)
                     SELECT ?, ?, ${mentionRecords}, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?) AND ${availableUploads}`)
                     .bind(title, description, candidates, "Low", creationToken, createdAt, user.id, user.id, requestKey, JSON.stringify(keys), keys.length);
-            const notifications = replyMatch
-                ? env.DB.prepare(`
-                    INSERT OR IGNORE INTO notifications (userId, actorId, issueId, replyId, kind, source, createdAt)
-                    SELECT mentioned.id, ?, replies.issueId, replies.id, 'mention', 'reply:' || replies.id, ?
-                    FROM replies JOIN json_each(replies.mentions) AS reference
-                    JOIN users AS mentioned ON mentioned.id = json_extract(reference.value, '$.userId')
-                    WHERE replies.creationToken = ? AND mentioned.deletedAt IS NULL AND mentioned.id != ?
-                `).bind(user.id, createdAt, creationToken, user.id)
-                : env.DB.prepare(`
-                    INSERT OR IGNORE INTO notifications (userId, actorId, issueId, kind, source, createdAt)
-                    SELECT mentioned.id, ?, issues.id, 'mention', 'issue:' || issues.id, ?
-                    FROM issues JOIN json_each(issues.mentions) AS reference
-                    JOIN users AS mentioned ON mentioned.id = json_extract(reference.value, '$.userId')
-                    WHERE issues.creationToken = ? AND mentioned.deletedAt IS NULL AND mentioned.id != ?
-                `).bind(user.id, createdAt, creationToken, user.id);
             const remember = env.DB.prepare(`
                 INSERT OR IGNORE INTO mutation_requests (userId, requestKey, route, fingerprint, resourceId, createdAt)
                 SELECT ?, ?, ?, ?, id, ? FROM ${replyMatch ? "replies" : "issues"} WHERE creationToken = ?
@@ -209,15 +194,20 @@ export async function issues(request: Request, env: Env, user: User) {
                     AND EXISTS (SELECT 1 FROM ${table} WHERE creationToken = ?)`)
                 .bind(creationToken, JSON.stringify(keys), JSON.stringify(keys), creationToken);
             commitAttempted = true;
-            const [created] = await env.DB.batch([statement, notifications, remember, operation, attachImages]);
+            env.signal?.throwIfAborted();
+            const [created] = await env.DB.batch([statement, remember, operation, attachImages]);
             committed = created.meta.changes > 0;
+            env.signal?.throwIfAborted();
             if (!created.meta.changes) await rollbackImages(env, keys);
+            env.signal?.throwIfAborted();
             const saved = await env.DB.prepare("SELECT route, fingerprint, resourceId FROM mutation_requests WHERE userId = ? AND requestKey = ?")
                 .bind(user.id, requestKey).first<{ route: string; fingerprint: string; resourceId: number }>();
             if (!saved) throw new HttpError(409, "图片上传预留已过期，请重新提交。");
             if (saved.route !== url.pathname || saved.fingerprint !== fingerprint) throw new HttpError(409, "此提交标识已用于其他内容，请重新提交。");
+            if (committed) sendNotification();
             return Response.json({ id: saved.resourceId }, { status: 201 });
         } catch (error) {
+            env.signal?.throwIfAborted();
             if (!commitAttempted) await rollbackImages(env, keys);
             else if (!committed) console.error("创建内容的提交结果待核对，保留图片", requestKey, keys, error);
             throw error;
@@ -226,6 +216,7 @@ export async function issues(request: Request, env: Env, user: User) {
 
     const commentMatch = url.pathname.match(/^\/api\/replies\/(\d+)$/);
     if (commentMatch && ["PATCH", "DELETE"].includes(request.method)) {
+        env.signal?.throwIfAborted();
         const reply = await env.DB.prepare(`
             SELECT id, issueId, authorId, description, mentions, version, createdAt,
                 (SELECT json_group_array(key) FROM (SELECT key FROM images
@@ -250,13 +241,16 @@ export async function issues(request: Request, env: Env, user: User) {
             `).bind(reply.id, reply.id, reply.version);
             const remove = env.DB.prepare("DELETE FROM replies WHERE id = ? AND version = ?").bind(reply.id, reply.version);
             const operation = recordOperation(env.DB, user, "reply_deleted", { replyId: reply.id, issueId: reply.issueId });
+            env.signal?.throwIfAborted();
             const [_eventResult, _imageResult, result] = await env.DB.batch([event, removeImages, remove, operation]);
             if (!result.meta.changes) return Response.json({ error: "评论已被修改，请刷新后重试。" }, { status: 409 });
             return Response.json({ ok: true });
         }
+        env.signal?.throwIfAborted();
         const form = await readForm(request, UPLOAD_BODY_MAX_BYTES);
         const description = String(form.get("description") ?? "");
         const retained = form.getAll("retainedImages") as string[];
+        env.signal?.throwIfAborted();
         const files = await readImages(form, retained.length);
         if (retained.some(key => !oldImages.includes(key)) || new Set(retained).size !== retained.length) return Response.json({ error: "评论图片无效。" }, { status: 400 });
         if (description.length > DESCRIPTION_MAX_LENGTH || (!description.trim() && !retained.length && !files.length)) return Response.json({ error: "评论不能为空，文字最多 20000 个字符。" }, { status: 400 });
@@ -268,7 +262,10 @@ export async function issues(request: Request, env: Env, user: User) {
         let uploaded: string[] = [];
         let commitAttempted = false;
         try {
-            uploaded = await uploadImages(env, files);
+            env.signal?.throwIfAborted();
+            const upload = uploadImages(env, files);
+            env.waitUntil?.(upload.catch(error => { if (error !== env.signal?.reason) throw error; }));
+            uploaded = await upload;
             const availableUploads = `(SELECT COUNT(*) FROM images WHERE state = 'uploaded'
                 AND key IN (SELECT value FROM json_each(?))) = ?`;
             const uploadBindings = [JSON.stringify(uploaded), uploaded.length];
@@ -280,19 +277,6 @@ export async function issues(request: Request, env: Env, user: User) {
                 WHERE id = ?
                 AND version = ? AND ${availableUploads}
             `).bind(user.id, new Date().toISOString(), reply.id, reply.version, ...uploadBindings);
-            const notifyMentions = env.DB.prepare(`
-                INSERT OR IGNORE INTO notifications (userId, actorId, issueId, replyId, kind, source, createdAt)
-                SELECT users.id, ?, replies.issueId, replies.id, 'mention', 'reply:' || replies.id, ?
-                FROM users
-                CROSS JOIN replies
-                WHERE replies.id = ?
-                AND replies.version = ?
-                AND users.deletedAt IS NULL
-                AND users.id != ?
-                AND users.id IN (SELECT json_extract(value, '$.userId')
-                FROM json_each(${mentionRecords})) AND ${availableUploads}
-            `)
-                    .bind(user.id, new Date().toISOString(), reply.id, reply.version, user.id, candidates, ...uploadBindings);
             const queueRemovedImages = env.DB.prepare(`
                 UPDATE images SET replyId = NULL, position = NULL, state = CASE WHEN state = 'deleted' THEN state ELSE 'deleting' END
                 WHERE key IN (SELECT value FROM json_each(?)) AND replyId = ?
@@ -319,14 +303,18 @@ export async function issues(request: Request, env: Env, user: User) {
                     .bind(description, candidates, reply.id, reply.version, ...uploadBindings);
             const operation = recordOperation(env.DB, user, "reply_edited", { replyId: reply.id, issueId: reply.issueId });
             commitAttempted = true;
-            const [_editEvent, _mentionResult, _imageResult, _detachResult, _retainedResult, _uploadedResult, result] = await env.DB.batch([
-                recordEdit, notifyMentions, queueRemovedImages, moveRetained, attachRetained, attachUploaded, updateReply, operation,
+            env.signal?.throwIfAborted();
+            const [_editEvent, _imageResult, _detachResult, _retainedResult, _uploadedResult, result] = await env.DB.batch([
+                recordEdit, queueRemovedImages, moveRetained, attachRetained, attachUploaded, updateReply, operation,
             ]);
             if (!result.meta.changes) {
+                env.signal?.throwIfAborted();
                 await rollbackImages(env, uploaded);
                 return Response.json({ error: "评论已被修改，请刷新后重试。" }, { status: 409 });
             }
+            sendNotification();
         } catch (error) {
+            env.signal?.throwIfAborted();
             if (!commitAttempted) await rollbackImages(env, uploaded);
             else console.error("编辑评论的提交结果待核对，保留新图片", reply.id, uploaded, error);
             throw error;
@@ -336,10 +324,12 @@ export async function issues(request: Request, env: Env, user: User) {
 
     const assignmentMatch = url.pathname.match(/^\/api\/issues\/(\d+)\/assignees$/);
     if (assignmentMatch && request.method === "POST") {
+        env.signal?.throwIfAborted();
         const issue = await env.DB.prepare("SELECT authorId, assignmentVersion FROM issues WHERE id = ?").bind(assignmentMatch[1]).first<{ authorId: number | null; assignmentVersion: number }>();
         if (!issue) return Response.json({ error: "指派失败：未找到该工单。" }, { status: 404 });
         if (user.role !== "admin" && issue.authorId !== user.id) return Response.json({ error: "只有作者或管理员可以指派负责人。" }, { status: 403 });
         if (request.headers.get("If-Match") !== `"${issue.assignmentVersion}"`) return Response.json({ error: "指派失败：负责人已被修改，请刷新页面后重新编辑。" }, { status: 409 });
+        env.signal?.throwIfAborted();
         const form = await readForm(request);
         const assignees = assignmentRoles.flatMap(role => [...new Set(form.getAll(role).map(Number))].map(userId => ({ role, userId, accountRole: assignmentAccountRoles[role] })));
         if (assignees.some(entry => !Number.isSafeInteger(entry.userId) || entry.userId < 1)) return Response.json({ error: "指派失败：负责人无效。" }, { status: 400 });
@@ -347,6 +337,7 @@ export async function issues(request: Request, env: Env, user: User) {
         const eligibleMembers = `SELECT COUNT(*) FROM json_each(?) selection
             JOIN users member ON member.id = json_extract(selection.value, '$.userId')
             WHERE member.deletedAt IS NULL AND member.role = json_extract(selection.value, '$.accountRole')`;
+        env.signal?.throwIfAborted();
         const members = await env.DB.prepare(`SELECT (${eligibleMembers}) AS total`).bind(JSON.stringify(assignees)).first<{ total: number }>();
         if (members!.total !== assignees.length) throw new HttpError(400, "指派失败：产品、开发必须为管理员，测试必须为普通用户，且账户必须有效。");
         const memberCount = assignees.length;
@@ -381,29 +372,6 @@ export async function issues(request: Request, env: Env, user: User) {
                     JSON.stringify(assignees), memberCount,
                     JSON.stringify(assignees), JSON.stringify(assignees),
                 );
-        const notifyAssignees = env.DB.prepare(`
-                INSERT INTO notifications (userId, actorId, issueId, kind, source, createdAt, assignmentRole)
-                SELECT users.id, ?, ?, 'assignment', ? || ':' || json_extract(value, '$.role'), ?, json_extract(value, '$.role')
-                FROM json_each(?)
-                JOIN users ON users.id = json_extract(value, '$.userId')
-                WHERE users.deletedAt IS NULL
-                AND users.id != ?
-                AND NOT EXISTS (SELECT 1
-                FROM issue_assignees
-                WHERE issueId = ?
-                AND userId = users.id
-                AND role = json_extract(value, '$.role'))
-                AND EXISTS (SELECT 1
-                FROM issues
-                WHERE id = ?
-                AND assignmentVersion = ?
-                AND ${membersAreActive})
-            `)
-                .bind(
-                    user.id, assignmentMatch[1], crypto.randomUUID(), new Date().toISOString(),
-                    JSON.stringify(assignees), user.id, assignmentMatch[1],
-                    assignmentMatch[1], issue.assignmentVersion, JSON.stringify(assignees), memberCount,
-                );
         const removeAssignees = env.DB.prepare(`
             DELETE FROM issue_assignees WHERE issueId = ? AND EXISTS (
                 SELECT 1 FROM issues
@@ -434,20 +402,24 @@ export async function issues(request: Request, env: Env, user: User) {
                 ORDER BY issue_assignees.role, users.username
             `).bind(assignmentMatch[1]);
         const operation = recordOperation(env.DB, user, "issue_assignees", { issueId: Number(assignmentMatch[1]) });
-        const [_eventResult, _notificationResult, _removedResult, _insertedResult, result, _auditResult, rows] = await env.DB.batch([
-            recordAssignment, notifyAssignees, removeAssignees, insertAssignees, updateVersion, operation, selectAssignees,
+        env.signal?.throwIfAborted();
+        const [_eventResult, _removedResult, _insertedResult, result, _auditResult, rows] = await env.DB.batch([
+            recordAssignment, removeAssignees, insertAssignees, updateVersion, operation, selectAssignees,
         ]);
         if (!result.meta.changes) return Response.json({ error: "指派失败：负责人已被修改，请刷新页面后重新编辑。" }, { status: 409 });
+        sendNotification();
         return Response.json({ assignees: rows.results, assignmentVersion: issue.assignmentVersion + 1 });
     }
 
     const issueMatch = url.pathname.match(/^\/api\/issues\/(\d+)\/(status|priority)$/);
     if (issueMatch && request.method === "POST") {
+        env.signal?.throwIfAborted();
         const issue = await env.DB.prepare("SELECT authorId, version FROM issues WHERE id = ?").bind(issueMatch[1]).first<{ authorId: number | null; version: number }>();
         if (!issue) return Response.json({ error: "未找到该工单。" }, { status: 404 });
         if (user.role !== "admin" && issue.authorId !== user.id) {
             return Response.json({ error: "只有作者或管理员可以更改状态和优先级。" }, { status: 403 });
         }
+        env.signal?.throwIfAborted();
         const form = await readForm(request);
         if (request.headers.get("If-Match") !== `"${issue.version}"`) throw new HttpError(409, "工单已被修改，请重新读取后重试。");
         const field = issueMatch[2];
@@ -474,6 +446,7 @@ export async function issues(request: Request, env: Env, user: User) {
             ? env.DB.prepare("UPDATE issues SET status = ?, stateReason = ?, version = version + 1 WHERE id = ? AND version = ?").bind(value, stateReason, issueMatch[1], issue.version)
             : env.DB.prepare("UPDATE issues SET priority = ?, version = version + 1 WHERE id = ? AND version = ?").bind(value, issueMatch[1], issue.version);
         const operation = recordOperation(env.DB, user, field === "status" ? "issue_status" : "issue_priority", { issueId: Number(issueMatch[1]), value });
+        env.signal?.throwIfAborted();
         const [_eventResult, updated] = await env.DB.batch([recordChange, update, operation]);
         if (!updated.meta.changes) throw new HttpError(409, "工单已被修改，请重新读取后重试。");
         return Response.json(field === "status" ? { status: value, stateReason, version: issue.version + 1 } : { priority: value, version: issue.version + 1 });

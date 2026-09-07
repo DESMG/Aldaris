@@ -49,6 +49,7 @@ function validBoundary(value: Boundary) {
 }
 
 export async function timeline(request: Request, env: Env, issueId: string) {
+    env.signal?.throwIfAborted();
     const exists = await env.DB.prepare("SELECT id FROM issues WHERE id = ?").bind(issueId).first();
     if (!exists) throw new HttpError(404, "读取时间线：未找到该工单。");
     const url = new URL(request.url);
@@ -68,6 +69,7 @@ export async function timeline(request: Request, env: Env, issueId: string) {
         const count = env.DB.prepare(source + " SELECT COUNT(*) AS total FROM timeline").bind(issueId, issueId);
         const hidden = env.DB.prepare(source + " SELECT COUNT(*) AS total FROM timeline t" + range).bind(issueId, issueId, ...cursor.after, ...cursor.before);
         const middle = env.DB.prepare(source + select + range + " ORDER BY t.createdAt DESC, t.kind DESC, t.id DESC LIMIT 20").bind(issueId, issueId, ...cursor.after, ...cursor.before);
+        env.signal?.throwIfAborted();
         const [countResult, hiddenResult, middleResult] = await env.DB.batch([count, hidden, middle]);
         total = (countResult.results[0] as { total: number }).total;
         const rows = (middleResult.results as Row[]).reverse();
@@ -78,6 +80,7 @@ export async function timeline(request: Request, env: Env, issueId: string) {
         const count = env.DB.prepare(source + " SELECT COUNT(*) AS total FROM timeline").bind(issueId, issueId);
         const head = env.DB.prepare(source + select + " ORDER BY t.createdAt, t.kind, t.id LIMIT 10").bind(issueId, issueId);
         const tail = env.DB.prepare(source + select + " ORDER BY t.createdAt DESC, t.kind DESC, t.id DESC LIMIT 10").bind(issueId, issueId);
+        env.signal?.throwIfAborted();
         const [countResult, headResult, tailResult] = await env.DB.batch([count, head, tail]);
         total = (countResult.results[0] as { total: number }).total;
         const first = headResult.results as Row[];
@@ -93,6 +96,7 @@ export async function timeline(request: Request, env: Env, issueId: string) {
     let targetUnavailable = false;
     if (target !== null) {
         if (!Number.isSafeInteger(Number(target)) || Number(target) < 1) throw new HttpError(400, "时间线定位参数无效。");
+        env.signal?.throwIfAborted();
         const row = await env.DB.prepare(source + select + " WHERE t.kind = 'reply' AND t.id = ?").bind(issueId, issueId, target).first<Row>();
         targetEntry = row ? entry(row) : null;
         targetUnavailable = row === null;

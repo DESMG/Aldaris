@@ -15,4 +15,3 @@ export const USERNAME_PATTERN = /^[a-z]+[0-9]*$/;
 export const ASSIGNEE_MAX_COUNT = 5;
 export const LOGIN_ATTEMPT_LIMIT = 3;
 export const LOGIN_WINDOW_MS = 10 * 60 * 1000;
-export const NOTIFICATION_BATCH_LIMIT = 20;
