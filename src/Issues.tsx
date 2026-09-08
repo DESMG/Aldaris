@@ -122,7 +122,37 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
                                 <Chip size="small" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} variant="outlined" />
                                 <Chip size="small" label={`创建人：${issue.authorName ?? "匿名"}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
                                 {assignmentRoles.flatMap(role => issue.assignees.filter(member => member.role === role).map(member => (
-                                    <Chip key={`${role}-${member.id}`} size="small" label={`${assignmentLabels[role]}：${member.name}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
+                                    <Chip key={`${role}-${member.id}`} size="small" label={<>
+                                        {`${assignmentLabels[role]}：${member.name}`}
+                                        {member.id === user?.id && <Box component="span" aria-hidden="true" ref={(node: HTMLSpanElement | null) => {
+                                            if (!node) return;
+                                            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+                                            const animation = node.animate([
+                                                { transform: "translateX(-120%)", offset: 0 },
+                                                { transform: "translateX(-120%)", offset: 0.2 },
+                                                { transform: "translateX(120%)", offset: 0.65 },
+                                                { transform: "translateX(120%)", offset: 1 },
+                                            ], { duration: 2800, iterations: Infinity, easing: "ease-in-out" });
+                                            const updateMotion = () => {
+                                                if (reducedMotion.matches) animation.cancel();
+                                                else animation.play();
+                                            };
+                                            updateMotion();
+                                            reducedMotion.addEventListener("change", updateMotion);
+                                            return () => { animation.cancel(); reducedMotion.removeEventListener("change", updateMotion); };
+                                        }} sx={{
+                                            position: "absolute", inset: 0, pointerEvents: "none", transform: "translateX(-120%)",
+                                            background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%)",
+                                        }} />}
+                                    </>}
+                                        title={member.id === user?.id ? "你是此工单的关系人" : undefined}
+                                        sx={{
+                                            height: "auto", minHeight: 24,
+                                            "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 },
+                                            ...(member.id === user?.id && {
+                                                position: "relative", overflow: "hidden",
+                                            }),
+                                        }} />
                                 )))}
                                 <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: "auto" }, width: { xs: "100%", sm: "auto" } }}>{new Date(issue.createdAt).toLocaleString("sv-SE")}</Typography>
                             </Stack>

@@ -159,7 +159,8 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                     <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
                                         <Box component="span" sx={{ fontWeight: 700 }}>{reply.actorName ?? "匿名"}</Box>{" "}
                                         {reply.kind === "status" ? (reply.details.after === "Open" ? "重新打开了工单" : (reply.details.before === "Closed" ? "更改了关闭原因 (" : "关闭了工单 (") + (reply.details.stateReason === "completed" ? "已完成" : "已关闭") + ")")
-                                            : reply.kind === "priority" ? "将优先级从 " + reply.details.before + " 改为 " + reply.details.after
+                                            : reply.kind === "priority" ? <>加急了工单，当前优先级 <Chip component="span" size="small" variant="outlined" label={{ Low: "低", Medium: "中", High: "高" }[reply.details.after]}
+                                                color={reply.details.after === "High" ? "error" : reply.details.after === "Medium" ? "warning" : "info"} /></>
                                                 : reply.kind === "assignment" ? "更新了负责人"
                                                     : reply.kind === "reply_edited" ? "编辑了评论 #" + reply.details.replyId : "删除了评论 #" + reply.details.replyId}
                                     </Typography>
@@ -175,7 +176,21 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                 </Stack>
                             </Stack> : <Card id={"reply-" + reply.id} variant="outlined" sx={{ boxShadow: "none", borderRadius: 1, borderColor: String(reply.id) === target ? "primary.main" : "divider" }}>
                                 <CardHeader avatar={<Avatar>{reply.authorName.slice(0, 1)}</Avatar>} title={reply.authorName} subheader={new Date(reply.createdAt).toLocaleString("sv-SE")}
-                                    action={reply.authorId === issue.authorId ? <Chip label="作者" size="small" variant="outlined" /> : undefined} sx={{ bgcolor: "var(--surface-muted)" }} />
+                                    action={<Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                                        {reply.authorId === issue.authorId && <Chip label="作者" size="small" variant="outlined" />}
+                                        {(user?.id === reply.authorId || user?.role === "admin") && editing !== reply.id && <>
+                                            <Button variant="text" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
+                                                setEditing(reply.id);
+                                                setError("");
+                                            }}>编辑</Button>
+                                            <Button variant="text" color="error" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
+                                                setError("");
+                                                setDeleteConflict(false);
+                                                setDeletePreview(null);
+                                                setDeleting({ id: reply.id, version: reply.version });
+                                            }}>删除</Button>
+                                        </>}
+                                    </Stack>} sx={{ bgcolor: "var(--surface-muted)" }} />
                                 <Divider />
                                 <CardContent><Stack spacing={2}>
                                     {editing === reply.id ? <EditReplyForm reply={reply} saving={saving} onCancel={() => setEditing(null)} onSave={async (description, retainedImages, images, version) => {
@@ -196,18 +211,6 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                             setRefresh(value => value + 1);
                                         } finally { setSaving(false); }
                                     }} /> : <Content description={reply.description} images={reply.images} clearedImages={reply.clearedImages} mentions={reply.mentions} />}
-                                    {(user?.id === reply.authorId || user?.role === "admin") && editing !== reply.id && <Stack direction="row" spacing={1}>
-                                        <Button variant="text" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
-                                            setEditing(reply.id);
-                                            setError("");
-                                        }}>编辑</Button>
-                                        <Button variant="text" color="error" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
-                                            setError("");
-                                            setDeleteConflict(false);
-                                            setDeletePreview(null);
-                                            setDeleting({ id: reply.id, version: reply.version });
-                                        }}>删除</Button>
-                                    </Stack>}
                                 </Stack>
                                 </CardContent></Card>}</Fragment>)}
                         {user ? <ReplyForm issueId={id} saving={saving} blocked={loading || detailLoading || !!loadError || !!detailError} editing={editing !== null} onStatus={async (status, reason, replied) => {
