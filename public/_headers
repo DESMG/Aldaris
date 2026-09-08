@@ -10,3 +10,19 @@
   x-frame-options: SAMEORIGIN
   x-copyright: DESMG All Rigths Reserved.
   x-powered-by: Copyright="DESMG All Rigths Reserved."; Telegram="jyxjjj https://t.me/jyxjjj";
+
+/
+  ! Cache-Control
+  ! CDN-Cache-Control
+  ! Cloudflare-CDN-Cache-Control
+  Cache-Control: no-cache
+  CDN-Cache-Control: no-cache
+  Cloudflare-CDN-Cache-Control: no-cache
+
+/index.html
+  ! Cache-Control
+  ! CDN-Cache-Control
+  ! Cloudflare-CDN-Cache-Control
+  Cache-Control: no-cache
+  CDN-Cache-Control: no-cache
+  Cloudflare-CDN-Cache-Control: no-cache
