@@ -64,17 +64,15 @@
                 margin: 0;
                 min-height: 100dvh;
                 font-family: "JetBrains Mono", "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", system-ui, -apple-system, emoji, monospace;
-                font-size: 0.875rem;
+                font-size: 1rem;
                 line-height: 1.5;
                 background: var(--background);
                 color: var(--text);
             }
-            main { width: 100%; max-width: 1200px; margin: 0 auto; padding: 32px 16px; display: flex; flex-direction: column; gap: 24px; }
-            header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 20px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); }
+            main { width: 100%; max-width: 720px; min-height: 100dvh; margin: 0 auto; padding: 32px 16px; display: flex; flex-direction: column; justify-content: center; }
             a { color: var(--primary); text-decoration: none; }
-            .title { color: var(--text); font-size: 1.75rem; font-weight: 750; line-height: 1.235; overflow-wrap: anywhere; }
-            .message { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 32px; border: 1px solid var(--divider); border-radius: 12px; text-align: center; animation: enterContent 360ms ease-out; }
-            h1 { margin: 0; font-size: 1.5rem; font-weight: 700; line-height: 1.334; }
+            .message { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 40px 24px; border: 1px solid var(--divider); border-radius: 12px; text-align: center; animation: enterContent 360ms ease-out; }
+            h1 { margin: 0; font-size: clamp(1.75rem, 5vw, 2rem); font-weight: 700; line-height: 1.334; }
             p { margin: 0; color: var(--text-secondary); }
             .button { display: inline-flex; align-items: center; justify-content: center; min-width: 64px; padding: 5px 15px; border: 1px solid var(--divider); border-radius: 8px; color: var(--text); background: var(--control-bg); font-weight: 650; line-height: 1.75; }
             .button:hover { background: var(--control-hover); }
@@ -82,14 +80,10 @@
             .primary { padding: 6px 16px; color: #ffffff; background: var(--positive-bg); border-color: var(--emphasis-border); }
             .primary:hover { background: var(--positive-hover); }
             .primary:active { background: var(--positive-active); }
-            footer { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; padding-top: 16px; }
-            footer a { display: inline-flex; align-items: center; justify-content: center; min-width: 64px; min-height: 40px; padding: 6px 16px; border-radius: 24px; font-weight: 650; line-height: 1.75; }
-            footer a:hover { background: var(--selected); }
             :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
             ::selection { background: var(--focus); }
             @media (min-width: 600px) {
                 main { padding-right: 24px; padding-left: 24px; }
-                header { padding: 28px; }
             }
             @keyframes enterContent {
                 from { opacity: 0; transform: translateY(6px); }
@@ -102,21 +96,11 @@
     </head>
     <body>
         <main>
-            <header>
-                <a class="title" href="/#/">问题管理系统</a>
-                <a class="button" href="/#/">← 返回列表</a>
-            </header>
             <section class="message" aria-labelledby="not-found-title">
                 <h1 id="not-found-title">404 - 页面不存在</h1>
                 <p>请检查地址，或返回首页继续浏览。</p>
                 <a class="button primary" href="/#/">返回首页</a>
             </section>
-            <footer>
-                <a href="/#/privacy">隐私政策</a>
-                <a href="/#/terms">使用条款</a>
-                <a href="/#/license">开源许可</a>
-                <a href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">源代码</a>
-            </footer>
         </main>
     </body>
 </html>
