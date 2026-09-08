@@ -29,7 +29,7 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
     const [error, setError] = useState("");
     const [refresh, setRefresh] = useState(0);
     const lastRefresh = useRef(refresh);
-    const [creating, setCreating] = useState(false);
+    const [creating, setCreating] = useState<DOMRect | null>(null);
     const pages = Math.max(1, Math.ceil(counts[status] / 10));
 
     useEffect(() => {
@@ -75,10 +75,10 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
         <Stack spacing={3}>
             <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 3 }}>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                    <Button variant="contained" sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none" }} onClick={() => {
+                    <Button variant="contained" sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none" }} onClick={event => {
                         if (!user) { navigate("/login"); return; }
                         setError("");
-                        setCreating(true);
+                        setCreating(event.currentTarget.getBoundingClientRect());
                     }}>新建工单</Button>
                 </Stack>
 
@@ -163,7 +163,7 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
             </Stack>
             {counts[status] > 0 && <Pagination count={pages} page={page} disabled={loading} onChange={(_, value) => setView(current => ({ ...current, page: value }))} />}
 
-            {creating && user && <CreateIssueDialog onClose={() => setCreating(false)} />}
+            {creating && user && <CreateIssueDialog origin={creating} onClose={() => setCreating(null)} />}
 
         </Stack>
     );

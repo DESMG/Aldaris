@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useRef, useState } from "react";
+import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Avatar, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, GlobalStyles, IconButton, LinearProgress, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
 import Container from "@mui/material/Container";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -30,6 +30,8 @@ const slogans = [
 export default function App() {
     const apiSession = getApiSessionGeneration();
     const [path, setPath] = useState(window.location.hash.slice(1) || "/");
+    const pageContent = useRef<HTMLDivElement | null>(null);
+    const pageExitAnimation = useRef<Animation | null>(null);
     const [sloganIndex, setSloganIndex] = useState(() => Math.floor(Math.random() * slogans.length));
     const sloganPath = useRef(path);
     const [user, setUser] = useState<User | null>(null);
@@ -53,6 +55,17 @@ export default function App() {
     const pathname = path.split("?")[0];
     const locationSearch = path.includes("?") ? path.slice(path.indexOf("?") + 1) : "";
     const detail = pathname.match(/^\/issues\/(\d+)$/);
+    const isIssueDetail = !!detail;
+    const isIssueList = pathname === "/";
+    const attachPageContent = useCallback((node: HTMLDivElement | null) => {
+        pageContent.current = node;
+        if (!node) return;
+        const animation = (isIssueDetail || isIssueList) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? node.animate([
+            { transform: isIssueDetail ? "translateX(64px)" : "translateX(-64px)", opacity: 0 },
+            { transform: "translateX(0)", opacity: 1 },
+        ], { duration: 500, easing: "ease-out" }) : null;
+        return () => { animation?.cancel(); pageExitAnimation.current?.cancel(); pageContent.current = null; };
+    }, [isIssueDetail, isIssueList]);
     const replyTarget = new URLSearchParams(locationSearch).get("reply");
 
     function syncUser(nextUser: User | null) {
@@ -127,7 +140,23 @@ export default function App() {
                 setPausedAccount(null);
             }
             historyIndex.current = nextIndex;
-            setPath(window.location.hash.slice(1) || "/");
+            const nextPath = window.location.hash.slice(1) || "/";
+            const content = pageContent.current;
+            pageExitAnimation.current?.cancel();
+            if (content) content.inert = false;
+            if (content?.dataset.issueDetail === "true" && nextPath.split("?")[0] === "/" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+                content.inert = true;
+                const session = getApiSessionGeneration();
+                const animation = content.animate([
+                    { transform: "translateX(0)", opacity: 1 },
+                    { transform: "translateX(64px)", opacity: 0 },
+                ], { duration: 500, easing: "ease-in", fill: "forwards" });
+                pageExitAnimation.current = animation;
+                void animation.finished.then(() => {
+                    if (window.location.href === nextUrl && getApiSessionGeneration() === session) setPath(nextPath);
+                    else { animation.cancel(); content.inert = false; }
+                }, () => { /* Navigation or unmount cancelled the animation. */ });
+            } else setPath(nextPath);
         };
         const changed = () => {
             authController.current?.abort();
@@ -246,10 +275,10 @@ export default function App() {
                                         </IconButton>
                                         <Menu id="account-menu" anchorEl={accountAnchor} open={Boolean(accountAnchor)} onClose={() => setAccountAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ list: { "aria-labelledby": "account-button" }, paper: { sx: { minWidth: 200, mt: 1 } } }}>
                                             <Box sx={{ px: 2, py: 1 }}>
-                                                <Typography variant="subtitle2">{user.name}</Typography>
+                                                <Typography variant="subtitle2" sx={{ overflowWrap: "anywhere" }}>{user.name} <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>(@{user.username})</Box></Typography>
                                                 <Typography variant="caption" color="text.secondary">{user.role === "admin" ? "管理员" : "用户"}</Typography>
                                             </Box>
-                                            <Divider />
+                                            <Divider sx={{ my: 1 }} />
                                             <MenuItem component="a" href="/#/account" onClick={() => setAccountAnchor(null)}>账户设置</MenuItem>
                                             {user.role === "admin" && <MenuItem component="a" href="/#/admin/users" onClick={() => setAccountAnchor(null)}>用户管理</MenuItem>}
                                             {user.role === "admin" && <MenuItem component="a" href="/#/operations" onClick={() => setAccountAnchor(null)}>操作记录</MenuItem>}
@@ -285,7 +314,7 @@ export default function App() {
                         </Box>}
                         {loading && <LinearProgress aria-label="读取登录状态" />}
                         {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{error}</Alert>}
-                        {pathname === "/license" ? <LicensePage /> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={locationSearch} />
+                        {pathname === "/license" ? <LicensePage /> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className={isIssueDetail || isIssueList ? undefined : "page-content"} sx={isIssueList ? { "& .MuiPaper-outlined, & .MuiAlert-root": { animation: "none" } } : undefined} data-issue-detail={isIssueDetail} ref={attachPageContent}>{pathname === "/" ? <Issues user={pageUser} locationSearch={locationSearch} />
                             : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
                                 : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
                                     : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
