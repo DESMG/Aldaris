@@ -7,7 +7,7 @@ export { inspectImage } from "../shared/image-format.ts";
 
 export async function uploadImages(env: Env, files: { bytes: Uint8Array; contentType: string }[]) {
     if (!files.length) return [];
-    const rows = files.map(file => ({ key: `${crypto.randomUUID()}.${file.contentType === "image/png" ? "png" : "jpg"}`, contentType: file.contentType, byteSize: file.bytes.length }));
+    const rows = files.map(file => ({ key: `${crypto.randomUUID()}.webp`, contentType: file.contentType, byteSize: file.bytes.length }));
     const keys = rows.map(row => row.key);
     const reserve = env.DB.prepare(`INSERT INTO images (key, contentType, byteSize, state, createdAt)
         SELECT json_extract(value, '$.key'), json_extract(value, '$.contentType'),
@@ -69,6 +69,7 @@ export async function readImages(form: FormData, retainedCount = 0): Promise<{ b
         if (!file.size || file.size > IMAGE_MAX_BYTES) throw new HttpError(400, "上传图片：每张图片必须大于 0 字节且不超过 1 MiB。");
         const bytes = new Uint8Array(await file.arrayBuffer());
         const info = inspectImage(bytes);
+        if (info.contentType !== "image/webp") throw new HttpError(400, "上传图片：仅接受静态 WebP 图片，请通过页面重新选择图片。");
         if (file.type !== info.contentType) throw new HttpError(400, "上传图片：声明的格式与实际图片内容不一致。");
         images.push({ bytes, contentType: info.contentType });
     }

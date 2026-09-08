@@ -76,7 +76,7 @@ async function route(request: Request, env: Env, ctx: ExecutionContext) {
         const response = await issues(request, env, user);
         if (response) return response;
     }
-    const imageMatch = url.pathname.match(/^\/api\/images\/([a-f0-9-]{36}\.(?:png|jpg))$/);
+    const imageMatch = url.pathname.match(/^\/api\/images\/([a-f0-9-]{36}\.webp)$/);
     if (imageMatch && request.method === "GET") {
         env.signal?.throwIfAborted();
         const record = await env.DB.prepare("SELECT state FROM images WHERE key = ?").bind(imageMatch[1]).first<{ state: string }>();
