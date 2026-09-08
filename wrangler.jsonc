@@ -10,7 +10,7 @@
         "default": { "type": "worker", "cache": { "enabled": false } },
         "Images": { "type": "worker", "cache": { "enabled": true } }
     },
-    "triggers": { "crons": ["*/15 * * * *"] },
+    "triggers": { "crons": ["0 * * * *"] },
     "d1_databases": [
         {
             "binding": "DB",
