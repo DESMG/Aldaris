@@ -130,7 +130,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                     <Stack spacing={1}>
                         <Typography component="h1" variant="h5" sx={{ overflowWrap: "anywhere" }}>{issue.title} <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>#{issue.id}</Box></Typography>
                         <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                            <Chip label={issue.status === "Open" ? "未关闭" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
+                            <Chip label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
                             <Typography variant="body2" color="text.secondary">{issue.authorName ?? "匿名"} 创建了此工单</Typography>
                         </Stack>
                     </Stack>
@@ -275,7 +275,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                     <Stack spacing={2}>
                         <Typography component="h2" variant="h6">问题属性</Typography>
                         <Typography variant="body2" color="text.secondary">状态</Typography>
-                        <Box><Chip label={issue.status === "Open" ? "未关闭" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} /></Box>
+                        <Box><Chip label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} /></Box>
                         <Divider />
                         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                             <Typography variant="body2" color="text.secondary">优先级</Typography>

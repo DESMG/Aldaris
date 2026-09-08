@@ -20,7 +20,6 @@ import PolicyPage from "./PolicyPage";
 import Users from "./Users";
 
 const slogans = [
-    "唉，你竟堕落至此？曾几何时，你是我们最耀眼的希望，是我们最珍视的子嗣；如今，你却已与我们背道而驰，彻底迷失。你不仅自取沉沦，更将那些追随你的人也一同拖入了深渊。",
     "若任由他将黑暗圣堂武士被玷污的影响带回艾尔，一切都将万劫不复。我们会找到他，并将他带回接受审判。",
     "我们审判官肩负着超越这些琐事、确保族人安全与未来的职责。如今真正威胁我们的并非异虫，而是那个背离正道的塔萨达。",
     "我们曾试图惩罚你，然而真正犯错的却是我们。你代表着我们所有人身上最伟大的一面，而我们全部的希望如今都与你同在。",
@@ -63,7 +62,7 @@ export default function App() {
         const animation = (isIssueDetail || isIssueList) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? node.animate([
             { transform: isIssueDetail ? "translateX(64px)" : "translateX(-64px)", opacity: 0 },
             { transform: "translateX(0)", opacity: 1 },
-        ], { duration: 500, easing: "ease-out" }) : null;
+        ], { duration: 250, easing: "ease-out" }) : null;
         return () => { animation?.cancel(); pageExitAnimation.current?.cancel(); pageContent.current = null; };
     }, [isIssueDetail, isIssueList]);
     const replyTarget = new URLSearchParams(locationSearch).get("reply");
@@ -150,7 +149,7 @@ export default function App() {
                 const animation = content.animate([
                     { transform: "translateX(0)", opacity: 1 },
                     { transform: "translateX(64px)", opacity: 0 },
-                ], { duration: 500, easing: "ease-in", fill: "forwards" });
+                ], { duration: 250, easing: "ease-in", fill: "forwards" });
                 pageExitAnimation.current = animation;
                 void animation.finished.then(() => {
                     if (window.location.href === nextUrl && getApiSessionGeneration() === session) setPath(nextPath);

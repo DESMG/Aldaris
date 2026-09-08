@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
     Alert, Box, Button, Chip,
     LinearProgress, Pagination, Paper, Stack, Tab, Tabs, Typography,
@@ -30,7 +30,28 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
     const [refresh, setRefresh] = useState(0);
     const lastRefresh = useRef(refresh);
     const [creating, setCreating] = useState<DOMRect | null>(null);
-    const pages = Math.max(1, Math.ceil(counts[status] / 10));
+    const results = useRef<HTMLDivElement>(null);
+    const resultsExitAnimation = useRef<Animation | null>(null);
+    const [loadedStatus, setLoadedStatus] = useState(status);
+    const [loadedPage, setLoadedPage] = useState(page);
+    const previousStatus = useRef(status);
+    const previousPage = useRef(page);
+    const pages = Math.max(1, Math.ceil(counts[loadedStatus] / 10));
+
+    useLayoutEffect(() => {
+        resultsExitAnimation.current?.cancel();
+        resultsExitAnimation.current = null;
+        if (previousStatus.current === loadedStatus && previousPage.current === loadedPage) return;
+        const forward = previousStatus.current !== loadedStatus ? loadedStatus === "Closed" : loadedPage > previousPage.current;
+        previousStatus.current = loadedStatus;
+        previousPage.current = loadedPage;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const animation = results.current!.animate([
+            { transform: forward ? "translateX(64px)" : "translateX(-64px)", opacity: 0 },
+            { transform: "translateX(0)", opacity: 1 },
+        ], { duration: 250, easing: "ease-out" });
+        return () => animation.cancel();
+    }, [loadedStatus, loadedPage]);
 
     useEffect(() => {
         const params = new URLSearchParams();
@@ -54,55 +75,66 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
         lastRefresh.current = refresh;
         setLoading(force || !getCachedJson<IssuesData>(url));
         setError("");
-        cachedJson<IssuesData>(url, { refresh: force })
-            .then(data => {
+        const forward = previousStatus.current !== status ? status === "Closed" : page > previousPage.current;
+        const exitAnimation = (previousStatus.current !== status || previousPage.current !== page) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches ? results.current!.animate([
+            { transform: "translateX(0)", opacity: 1 },
+            { transform: forward ? "translateX(-64px)" : "translateX(64px)", opacity: 0 },
+        ], { duration: 250, easing: "ease-in", fill: "forwards" }) : null;
+        resultsExitAnimation.current = exitAnimation;
+        Promise.all([cachedJson<IssuesData>(url, { refresh: force }), exitAnimation?.finished])
+            .then(([data]) => {
                 if (controller.signal.aborted) return;
                 setIssues(data.issues);
                 setCounts(data.counts);
+                setLoadedStatus(status);
+                setLoadedPage(page);
                 const nextPage = Math.min(page, Math.max(1, Math.ceil(data.counts[status] / 10)));
                 if (nextPage !== page) setView(current => ({ ...current, page: nextPage }));
             })
             .catch((error) => {
-                if (!controller.signal.aborted) setError(`获取列表失败：${String(error)}`);
+                if (!controller.signal.aborted) {
+                    exitAnimation?.cancel();
+                    setError(`获取列表失败：${String(error)}`);
+                }
             })
             .finally(() => {
                 if (!controller.signal.aborted) setLoading(false);
             });
-        return () => controller.abort();
+        return () => { controller.abort(); exitAnimation?.cancel(); };
     }, [status, page, url, refresh, setView]);
 
     return (
         <Stack spacing={3}>
             <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 3 }}>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
+                    <Tabs value={status} onChange={(_, value: "Open" | "Closed") => {
+                        setView(current => ({ ...current, status: value, page: 1 }));
+                    }} aria-label="工单状态" variant="scrollable" sx={{ minWidth: 0, borderBottom: "1px solid", borderColor: "divider" }}>
+                        <Tab value="Open" label={`打开 (${counts.Open})`} />
+                        <Tab value="Closed" label={`已关闭 (${counts.Closed})`} />
+                    </Tabs>
                     <Button variant="contained" sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none" }} onClick={event => {
                         if (!user) { navigate("/login"); return; }
                         setError("");
                         setCreating(event.currentTarget.getBoundingClientRect());
                     }}>新建工单</Button>
                 </Stack>
-
-                <Tabs value={status} onChange={(_, value: "Open" | "Closed") => {
-                    setView(current => ({ ...current, status: value, page: 1 }));
-                }} aria-label="工单状态" sx={{ mt: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                    <Tab value="Open" label={`未关闭 (${counts.Open})`} />
-                    <Tab value="Closed" label={`已关闭 (${counts.Closed})`} />
-                </Tabs>
             </Paper>
             {error && !creating && (
                 <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>
                     {error}
                 </Alert>
             )}
-            {loading && <LinearProgress aria-label="正在加载工单" />}
+            <Box sx={{ height: 4 }}>{loading && <LinearProgress aria-label="正在加载工单" />}</Box>
+            <Stack ref={results} spacing={3} inert={status !== loadedStatus || page !== loadedPage}>
             <Typography variant="body2" color="text.secondary">
-                共 {counts[status]} 个工单
+                共 {counts[loadedStatus]} 个工单
             </Typography>
 
-            {!loading && !error && issues.length === 0 && (
+            {(!loading || status !== loadedStatus || page !== loadedPage) && !error && issues.length === 0 && (
                 <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
                     <Typography>
-                        {`暂无${status === "Open" ? "未关闭" : "已关闭"}的工单。`}
+                        {`暂无${loadedStatus === "Open" ? "打开" : "已关闭"}的工单。`}
                     </Typography>
                 </Paper>
             )}
@@ -118,7 +150,7 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
                                 <Box component="span" sx={{ color: "text.secondary", fontWeight: 400, mr: 1.5 }}>#{issue.id}</Box>{issue.title}
                             </Typography>
                             <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                                <Chip size="small" label={issue.status === "Open" ? "未关闭" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
+                                <Chip size="small" label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
                                 <Chip size="small" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} variant="outlined" />
                                 <Chip size="small" label={`创建人：${issue.authorName ?? "匿名"}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
                                 {assignmentRoles.flatMap(role => issue.assignees.filter(member => member.role === role).map(member => (
@@ -161,7 +193,8 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
                     </Paper>
                 ))}
             </Stack>
-            {counts[status] > 0 && <Pagination count={pages} page={page} disabled={loading} onChange={(_, value) => setView(current => ({ ...current, page: value }))} />}
+            {counts[loadedStatus] > 0 && <Pagination sx={{ "& .MuiPagination-ul": { justifyContent: "flex-end" } }} count={pages} page={loadedPage} disabled={loading} onChange={(_, value) => setView(current => ({ ...current, page: value }))} />}
+            </Stack>
 
             {creating && user && <CreateIssueDialog origin={creating} onClose={() => setCreating(null)} />}
 
