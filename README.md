@@ -35,3 +35,9 @@ const digestHex = Array.from(digest, byte => byte.toString(16).padStart(2, "0"))
 const saltHex = Array.from(salt, byte => byte.toString(16).padStart(2, "0")).join("");
 console.log(`$${iterations}$${digestHex}$${saltHex}$`);
 ```
+
+## 许可证
+
+本项目采用 [GNU Affero General Public License v3.0 (AGPLv3)](LICENSE) 许可证。
+
+第三方组件遵循各自的许可证，详见[第三方组件与许可说明](third_party/README.md)。

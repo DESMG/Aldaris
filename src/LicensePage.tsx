@@ -1,5 +1,4 @@
 import { Button, Link, Paper, Stack, Typography } from "@mui/material";
-import thirdPartyLicenses from "./thirdPartyLicenses";
 
 export default function LicensePage() {
     return <Paper component="article" variant="outlined" sx={{ p: { xs: 2, sm: 4 }, overflowWrap: "anywhere" }}>
@@ -10,13 +9,8 @@ export default function LicensePage() {
             <Typography>在适用法律允许的范围内，本软件不提供任何担保，包括适销性或适合特定用途的默示担保，具体以以下许可证为准。</Typography>
             <Typography>本站使用条款不限制许可证授予您的软件权利。工单、评论和图片等用户提交内容不会仅因使用本软件而自动适用此许可证。第三方组件遵循各自的许可证。</Typography>
             <Typography><Link href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">获取 Aldaris 源代码</Link></Typography>
-            <Typography component="h2" variant="h6">许可证全文</Typography>
-            <Typography><Link href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="external noopener noreferrer nofollow">GNU Affero General Public License 第 3 版原文</Link></Typography>
-            <Typography component="h2" variant="h6">第三方组件</Typography>
-            <Typography>以下列出 React、MUI、Emotion 及其依赖，以及构建工具 Vite 的版本与许可证。点击链接查看 Open Source Initiative 发布的许可协议原文。</Typography>
-            {thirdPartyLicenses.map(component => <Typography key={`${component.name}@${component.version}`}>
-                <Link href={component.href} target="_blank" rel="external noopener noreferrer nofollow">{component.name} {component.version} ({component.license})</Link>
-            </Typography>)}
+            <Typography><Link href="https://github.com/DESMG/Aldaris/blob/main/LICENSE" target="_blank" rel="external noopener noreferrer nofollow">项目许可证全文</Link></Typography>
+            <Typography><Link href="https://github.com/DESMG/Aldaris/blob/main/third_party/README.md" target="_blank" rel="external noopener noreferrer nofollow">第三方组件与许可链接</Link></Typography>
             <Button href="/" variant="contained" sx={{ alignSelf: "center" }}>我已知晓</Button>
         </Stack>
     </Paper>;
