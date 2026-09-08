@@ -174,7 +174,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                             setError("");
                         }}>保留表单并使用此版本</Button>
                     </Stack></Paper>}
-                    <TextField name="name" label="昵称" value={editName} onChange={event => { draft.setValue({ ...draft.value, name: event.target.value }); event.target.setCustomValidity(Array.from(event.target.value).length > NAME_MAX_LENGTH ? "昵称最多 32 个字符。" : ""); }} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH * 2 } }} />
+                    <TextField name="name" label="昵称" value={editName} onChange={event => { draft.setValue({ ...draft.value, name: event.target.value }); event.target.setCustomValidity(Array.from(event.target.value).length > NAME_MAX_LENGTH ? "昵称最多 32 个字符。" : ""); }} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH * 2 } }} helperText="中文真实姓名；重名用数字或减号加部门名区分，最多 32 字符" />
                     <TextField name="username" label="用户名" value={editUsername} onChange={event => draft.setValue({ ...draft.value, username: event.target.value })} required disabled={saving || reloading} slotProps={{ htmlInput: { maxLength: USERNAME_MAX_LENGTH, pattern: "[A-Za-z]+[0-9]*" } }} helperText="本人姓名的英文拼音，重名在末尾加数字，最多 32 字符" />
                     <Typography variant="caption" color="text.secondary">用户名和昵称在本标签页自动保存；密码需重新填写。</Typography>
                     <TextField name="password" value={password} onChange={event => setPassword(event.target.value)} label="新密码" type="password" autoComplete="new-password" helperText="留空则保留原密码" disabled={saving || reloading} slotProps={{ htmlInput: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } }} />

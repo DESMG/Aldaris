@@ -1,5 +1,5 @@
 import type { Env } from "./env";
-import type { User } from "../shared/types";
+import type { Issue, User } from "../shared/types";
 import { mentionCandidates } from "../shared/mentions";
 import { mentionDetails, mentionRecords } from "./mentions";
 import { assignmentAccountRoles, assignmentRoles } from "../shared/assignments";
@@ -414,7 +414,7 @@ export async function issues(request: Request, env: Env, user: User) {
     const issueMatch = url.pathname.match(/^\/api\/issues\/(\d+)\/(status|priority)$/);
     if (issueMatch && request.method === "POST") {
         env.signal?.throwIfAborted();
-        const issue = await env.DB.prepare("SELECT authorId, version FROM issues WHERE id = ?").bind(issueMatch[1]).first<{ authorId: number | null; version: number }>();
+        const issue = await env.DB.prepare("SELECT authorId, version, priority FROM issues WHERE id = ?").bind(issueMatch[1]).first<Pick<Issue, "authorId" | "version" | "priority">>();
         if (!issue) return Response.json({ error: "未找到该工单。" }, { status: 404 });
         if (user.role !== "admin" && issue.authorId !== user.id) {
             return Response.json({ error: "只有作者或管理员可以更改状态和优先级。" }, { status: 403 });
@@ -427,6 +427,10 @@ export async function issues(request: Request, env: Env, user: User) {
         const allowed = field === "status" ? ["Open", "Closed"] : ["Low", "Medium", "High"];
         if (!allowed.includes(value)) {
             return Response.json({ error: "更新工单：状态或优先级无效。" }, { status: 400 });
+        }
+        if (field === "priority") {
+            if (issue.priority === "High") return Response.json({ error: "加急工单：已达到高优先级，无法继续加急。" }, { status: 400 });
+            if (value !== (issue.priority === "Low" ? "Medium" : "High")) return Response.json({ error: "加急工单：只能从低到中、从中到高逐级提升优先级。" }, { status: 400 });
         }
         const stateReason = value === "Closed" ? String(form.get("stateReason") ?? "") : null;
         if (field === "status" && value === "Closed" && !["completed", "not_planned"].includes(stateReason!)) return Response.json({ error: "关闭工单：请选择已完成或已关闭。" }, { status: 400 });

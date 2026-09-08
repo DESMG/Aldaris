@@ -7,9 +7,9 @@ function invalid(format: string): never {
     throw new HttpError(400, `上传图片：${format} 图片结构无效或文件不完整。`);
 }
 
-function dimensions(width: number, height: number) {
-    if (!width || !height || width > IMAGE_MAX_DIMENSION || height > IMAGE_MAX_DIMENSION || width * height > IMAGE_MAX_PIXELS) {
-        throw new HttpError(400, "上传图片：尺寸超过限制 (单边最多 8192 像素、最多 16 Mi 像素)。");
+function dimensions(width: number, height: number, maxDimension: number, maxPixels: number) {
+    if (!width || !height || width > maxDimension || height > maxDimension || width * height > maxPixels) {
+        throw new HttpError(400, "上传图片：图片尺寸过大，请缩小后重试。");
     }
 }
 
@@ -22,7 +22,7 @@ const crcTable = Uint32Array.from({ length: 256 }, (_, value) => {
     return value >>> 0;
 });
 
-function png(bytes: Uint8Array): ImageInfo {
+function png(bytes: Uint8Array, maxDimension: number, maxPixels: number): ImageInfo {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let offset = 8;
     let width = 0;
@@ -47,7 +47,7 @@ function png(bytes: Uint8Array): ImageInfo {
             if (offset !== 8 || length !== 13) invalid("PNG");
             width = view.getUint32(start);
             height = view.getUint32(start + 4);
-            dimensions(width, height);
+            dimensions(width, height, maxDimension, maxPixels);
             depth = bytes[start + 8];
             color = bytes[start + 9];
             const validDepth = color === 0 ? [1, 2, 4, 8, 16] : color === 3 ? [1, 2, 4, 8] : [8, 16];
@@ -77,7 +77,7 @@ function png(bytes: Uint8Array): ImageInfo {
     return invalid("PNG");
 }
 
-function jpeg(bytes: Uint8Array): ImageInfo {
+function jpeg(bytes: Uint8Array, maxDimension: number, maxPixels: number): ImageInfo {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     let offset = 2;
     let width = 0;
@@ -101,7 +101,7 @@ function jpeg(bytes: Uint8Array): ImageInfo {
             if (width || length < 11) invalid("JPEG");
             height = view.getUint16(start + 1);
             width = view.getUint16(start + 3);
-            dimensions(width, height);
+            dimensions(width, height, maxDimension, maxPixels);
             const count = bytes[start + 5];
             if (count < 1 || count > 4 || length !== 8 + 3 * count || bytes[start] < 2 || bytes[start] > 16) invalid("JPEG");
             for (let index = start + 6; index < end; index += 3) {
@@ -164,9 +164,9 @@ function jpeg(bytes: Uint8Array): ImageInfo {
 
 // These checks validate container structure and resource bounds, not every compressed
 // pixel or metadata stream. Full decoding/re-encoding requires a trusted image codec.
-export function inspectImage(bytes: Uint8Array): ImageInfo {
+export function inspectImage(bytes: Uint8Array, maxDimension = IMAGE_MAX_DIMENSION, maxPixels = IMAGE_MAX_PIXELS): ImageInfo {
     if (!bytes.length) throw new HttpError(400, "上传图片：图片内容不能为空。");
-    if (text(bytes, 0, 8) === "\x89PNG\r\n\x1a\n") return png(bytes);
-    if (bytes[0] === 0xff && bytes[1] === 0xd8) return jpeg(bytes);
+    if (text(bytes, 0, 8) === "\x89PNG\r\n\x1a\n") return png(bytes, maxDimension, maxPixels);
+    if (bytes[0] === 0xff && bytes[1] === 0xd8) return jpeg(bytes, maxDimension, maxPixels);
     throw new HttpError(400, "上传图片：文件内容必须是静态 PNG 或 JPEG 图片。");
 }

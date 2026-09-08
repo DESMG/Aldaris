@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from "@mui/material";
+import { Alert, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from "@mui/material";
 import { api, assertApiSession, getApiSessionGeneration, navigate } from "./api";
 import Description from "./Description";
 import { useDraftGuard } from "./DraftGuard";
@@ -70,7 +70,6 @@ export default function CreateIssueDialog({ onClose }: { onClose: () => void }) 
                     <TextField label="标题" required autoFocus fullWidth disabled={saving} slotProps={{ htmlInput: { maxLength: TITLE_MAX_LENGTH } }} value={title} onChange={event => { submission.current = null; draft.setValue({ title: event.target.value, description, requestKey: "" }); }} />
                     <Description label="描述" value={description} onChange={value => { submission.current = null; draft.setValue({ title, description: value, requestKey: "" }); }} images={images} onImagesChange={files => { submission.current = null; draft.update({ requestKey: "" }); setImages(files); }} disabled={saving} onProcessingChange={setProcessing} />
                     <Alert severity="info">文字在本标签页自动保存；刷新后请重新选择未提交的图片。</Alert>
-                    <Stack direction="row"><Chip label="低优先级" color="info" variant="outlined" /></Stack>
                 </Stack>
             </DialogContent>
             <DialogActions>

@@ -1,12 +1,14 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Alert, Avatar, Box, Button, ButtonGroup, Card, CardContent, CardHeader, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Menu, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
-import { api, ApiError, assertApiSession, cachedJson, getApiSessionGeneration, getCachedJson } from "./api";
+import { Alert, Avatar, Box, Button, ButtonGroup, Card, CardContent, CardHeader, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Menu, LinearProgress, MenuItem, Paper, Stack, Typography } from "@mui/material";
+import { api, ApiError, assertApiSession, cachedJson, clearApiCache, getApiSessionGeneration, getCachedJson } from "./api";
 import type { Issue, Reply, User } from "./api";
 import Content from "./IssueContent";
 import { EditReplyForm, ReplyForm } from "./ReplyForms";
 import AssigneeEditor from "./AssigneeEditor";
 import useIssueTimeline from "./useIssueTimeline";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
+
+const priorityRank: Record<Issue["priority"], number> = { Low: 0, Medium: 1, High: 2 };
 
 export default function IssueDetail({ id, user, replyTarget }: { id: number; user: User | null; replyTarget: string | null }) {
     const apiSession = getApiSessionGeneration();
@@ -33,7 +35,6 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
     const [deleteConflict, setDeleteConflict] = useState(false);
     const [deletePreview, setDeletePreview] = useState<Reply | null>(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
-    const [editingPriority, setEditingPriority] = useState(false);
     const [editingAssignee, setEditingAssignee] = useState(false);
     const [closeMenu, setCloseMenu] = useState<HTMLElement | null>(null);
     const [closeReason, setCloseReason] = useState<"completed" | "not_planned">(() => cachedIssue?.issue.stateReason ?? "completed");
@@ -41,6 +42,13 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
 
     async function updateIssue(field: "status" | "priority", value: string, stateReason = closeReason) {
         if (!mounted.current || window.location.pathname !== `/issues/${id}` || updating.current || !issue) return false;
+        if (field === "priority" && priorityRank[value as Issue["priority"]] <= priorityRank[issue.priority]) {
+            clearApiCache();
+            setRefresh(value => value + 1);
+            setIssueConflict(null);
+            setError("");
+            return true;
+        }
         updating.current = true;
         setSaving(true);
         setError("");
@@ -55,7 +63,6 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
             setIssue((current) => current ? { ...current, ...changed } : current);
             if (field === "status") setCloseReason(value === "Open" ? "completed" : stateReason);
             setRefresh(value => value + 1);
-            if (field === "priority") setEditingPriority(false);
             return true;
         } catch (error) {
             if (error instanceof ApiError && error.status === 409) {
@@ -113,7 +120,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
         {loadError && <Alert severity="error" action={<Button color="inherit" disabled={editing !== null} onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{loadError}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
         {issueConflict && <Alert severity="warning" action={<Button color="inherit" disabled={saving || editing !== null || detailLoading || !!detailError} onClick={() => void updateIssue(issueConflict.field, issueConflict.value, issueConflict.stateReason)}>按最新版本重试</Button>}>
-            保留的操作：{issueConflict.field === "priority" ? `优先级改为 ${{ Low: "低", Medium: "中", High: "高" }[issueConflict.value as Issue["priority"]]}` : issueConflict.value === "Open" ? "重新打开工单" : issueConflict.stateReason === "completed" ? "关闭为已完成" : "关闭为不计划处理"}。请比较当前工单属性后提交。
+            保留的操作：{issueConflict.field === "priority" ? `加急至 ${{ Low: "低", Medium: "中", High: "高" }[issueConflict.value as Issue["priority"]]}优先级` : issueConflict.value === "Open" ? "重新打开工单" : issueConflict.stateReason === "completed" ? "关闭为已完成" : "关闭为不计划处理"}。请比较当前工单属性后提交。
         </Alert>}
         {targetUnavailable && <Alert severity="warning">定位的评论已删除或不可用。</Alert>}
         {issue &&
@@ -268,14 +275,11 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         <Divider />
                         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                             <Typography variant="body2" color="text.secondary">优先级</Typography>
-                            {canEdit && !editingPriority && <Button variant="text" disabled={saving || editing !== null} onClick={() => setEditingPriority(true)}>修改</Button>}
+                            {canEdit && issue.priority !== "High" && <Button variant="outlined" color="error" size="small" disabled={saving || editing !== null || detailLoading || !!detailError || issueConflict !== null} onClick={() => void updateIssue("priority", issue.priority === "Low" ? "Medium" : "High")}>
+                                加急
+                            </Button>}
                         </Stack>
-                        {editingPriority ? <Stack spacing={1}><TextField select label="修改优先级" size="small" value={issue.priority} disabled={saving || editing !== null} onChange={(event) => updateIssue("priority", event.target.value)}>
-                            <MenuItem value="Low">低</MenuItem>
-                            <MenuItem value="Medium">中</MenuItem>
-                            <MenuItem value="High">高</MenuItem>
-                        </TextField><Button variant="text" disabled={saving} onClick={() => setEditingPriority(false)}>取消</Button></Stack>
-                            : <Box><Chip variant="outlined" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} /></Box>}
+                        <Box><Chip variant="outlined" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} /></Box>
                         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                             <Typography variant="body2" color="text.secondary">负责人</Typography>
                             {canEdit && !editingAssignee && <Button variant="text" disabled={saving || editing !== null} onClick={() => {
