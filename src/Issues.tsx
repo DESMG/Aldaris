@@ -74,20 +74,20 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
     return (
         <Stack spacing={3}>
             <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 3 }}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-                <Button variant="contained" sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none" }} onClick={() => {
-                    if (!user) { navigate("/login"); return; }
-                    setError("");
-                    setCreating(true);
-                }}>新建工单</Button>
-            </Stack>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <Button variant="contained" sx={{ flexShrink: 0, whiteSpace: "nowrap", textTransform: "none" }} onClick={() => {
+                        if (!user) { navigate("/login"); return; }
+                        setError("");
+                        setCreating(true);
+                    }}>新建工单</Button>
+                </Stack>
 
-            <Tabs value={status} onChange={(_, value: "Open" | "Closed") => {
-                setView(current => ({ ...current, status: value, page: 1 }));
-            }} aria-label="工单状态" sx={{ mt: 2, borderBottom: "1px solid", borderColor: "divider" }}>
-                <Tab value="Open" label={`未关闭 (${counts.Open})`} />
-                <Tab value="Closed" label={`已关闭 (${counts.Closed})`} />
-            </Tabs>
+                <Tabs value={status} onChange={(_, value: "Open" | "Closed") => {
+                    setView(current => ({ ...current, status: value, page: 1 }));
+                }} aria-label="工单状态" sx={{ mt: 2, borderBottom: "1px solid", borderColor: "divider" }}>
+                    <Tab value="Open" label={`未关闭 (${counts.Open})`} />
+                    <Tab value="Closed" label={`已关闭 (${counts.Closed})`} />
+                </Tabs>
             </Paper>
             {error && !creating && (
                 <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>
@@ -129,10 +129,8 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
                                             const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
                                             const animation = node.animate([
                                                 { transform: "translateX(-120%)", offset: 0 },
-                                                { transform: "translateX(-120%)", offset: 0.2 },
-                                                { transform: "translateX(120%)", offset: 0.65 },
                                                 { transform: "translateX(120%)", offset: 1 },
-                                            ], { duration: 2800, iterations: Infinity, easing: "ease-in-out" });
+                                            ], { duration: 1500, iterations: Infinity, easing: "ease-in-out" });
                                             const updateMotion = () => {
                                                 if (reducedMotion.matches) animation.cancel();
                                                 else animation.play();
@@ -142,7 +140,10 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
                                             return () => { animation.cancel(); reducedMotion.removeEventListener("change", updateMotion); };
                                         }} sx={{
                                             position: "absolute", inset: 0, pointerEvents: "none", transform: "translateX(-120%)",
-                                            background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.45) 50%, transparent 65%)",
+                                            background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.9) 50%, transparent 65%)",
+                                            ".dark &": {
+                                                background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.5) 50%, transparent 65%)",
+                                            },
                                         }} />}
                                     </>}
                                         title={member.id === user?.id ? "你是此工单的关系人" : undefined}

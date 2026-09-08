@@ -219,7 +219,7 @@ export default function App() {
                 <CssBaseline enableColorScheme />
                 <GlobalStyles styles={pausedAccount ? { ".MuiModal-root:not(.reauthentication-dialog):not(.confirmation-dialog), .MuiPopper-root": { visibility: "hidden" } } : {}} />
                 {pathname === "/login" && <Box sx={{ position: "absolute", top: 16, right: 16 }}><ThemeToggle /></Box>}
-                <Container component="main" maxWidth="lg" inert={pausedAccount !== null} sx={{ py: 4, visibility: pausedAccount ? "hidden" : "visible", ...(pathname === "/login" ? { minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" } : {}) }} onClick={(event) => {
+                <Container component="main" maxWidth="md" inert={pausedAccount !== null} sx={{ py: 4, visibility: pausedAccount ? "hidden" : "visible", ...(pathname === "/login" ? { minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center" } : {}) }} onClick={(event) => {
                     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     const link = (event.target as Element).closest("a");
                     if (!link || link.origin !== window.location.origin || link.target || link.hasAttribute("download")) return;
@@ -242,7 +242,7 @@ export default function App() {
                                     <ThemeToggle />
                                     {user ? <>
                                         <IconButton id="account-button" aria-label="账户菜单" title={user.name} aria-controls={accountAnchor ? "account-menu" : undefined} aria-haspopup="true" aria-expanded={accountAnchor ? "true" : undefined} onClick={event => setAccountAnchor(event.currentTarget)}>
-                                            <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>{Array.from(user.name || user.username)[0]?.toUpperCase()}</Avatar>
+                                            <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" }}>{Array.from(user.name || user.username)[0]?.toUpperCase()}</Avatar>
                                         </IconButton>
                                         <Menu id="account-menu" anchorEl={accountAnchor} open={Boolean(accountAnchor)} onClose={() => setAccountAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ list: { "aria-labelledby": "account-button" }, paper: { sx: { minWidth: 200, mt: 1 } } }}>
                                             <Box sx={{ px: 2, py: 1 }}>
