@@ -3,16 +3,32 @@
     "name": "aldaris",
     "main": "worker/index.ts",
     "compatibility_date": "2026-07-30",
-    "compatibility_flags": ["nodejs_compat"],
+    "compatibility_flags": [
+        "nodejs_compat"
+    ],
     "keep_vars": true,
     "send_metrics": false,
     "workers_dev": false,
     "preview_urls": false,
     "exports": {
-        "default": { "type": "worker", "cache": { "enabled": false } },
-        "Images": { "type": "worker", "cache": { "enabled": true } }
+        "default": {
+            "type": "worker",
+            "cache": {
+                "enabled": false
+            }
+        },
+        "Images": {
+            "type": "worker",
+            "cache": {
+                "enabled": true
+            }
+        }
     },
-    "triggers": { "crons": ["0 * * * *"] },
+    "triggers": {
+        "crons": [
+            "0 * * * *"
+        ]
+    },
     "d1_databases": [
         {
             "binding": "DB",
@@ -21,7 +37,10 @@
         }
     ],
     "r2_buckets": [
-        { "binding": "IMAGES", "bucket_name": "aldaris-images" }
+        {
+            "binding": "IMAGES",
+            "bucket_name": "aldaris-images"
+        }
     ],
     "assets": {
         "not_found_handling": "404-page",

@@ -139,133 +139,133 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         "&::before": { content: '\'\'', position: "absolute", top: 0, bottom: 0, left: 32, width: 2, bgcolor: "divider" },
                         "& > *": { position: "relative" },
                     }}>
-                    <Card variant="outlined" sx={{ boxShadow: "none", borderRadius: 1 }}>
-                        <CardHeader avatar={<Avatar>{(issue.authorName ?? "匿").slice(0, 1)}</Avatar>} title={issue.authorName ?? "匿名"} subheader={new Date(issue.createdAt).toLocaleString("sv-SE")} sx={{ bgcolor: "var(--surface-muted)" }} />
-                        <Divider />
-                        <CardContent><Content description={issue.description} images={issue.images} clearedImages={issue.clearedImages} mentions={issue.mentions} /></CardContent>
-                    </Card>
+                        <Card variant="outlined" sx={{ boxShadow: "none", borderRadius: 1 }}>
+                            <CardHeader avatar={<Avatar>{(issue.authorName ?? "匿").slice(0, 1)}</Avatar>} title={issue.authorName ?? "匿名"} subheader={new Date(issue.createdAt).toLocaleString("sv-SE")} sx={{ bgcolor: "var(--surface-muted)" }} />
+                            <Divider />
+                            <CardContent><Content description={issue.description} images={issue.images} clearedImages={issue.clearedImages} mentions={issue.mentions} /></CardContent>
+                        </Card>
 
-                    {replies.map((reply, index) => <Fragment key={reply.kind + reply.id}>
-                    {index === 10 && hiddenCount > 0 && <Paper id="timeline-gap" variant="outlined" sx={{ p: 2 }}><Stack spacing={1}>
-                        <Typography variant="body2">中间还有 {hiddenCount} 条记录未展开 (共 {total} 条)。</Typography>
-                        <Button disabled={saving || loading || expanding || editing !== null} onClick={() => void expand()}>{expanding ? "正在展开…" : "展开较早的 20 条记录"}</Button>
-                        {hasSeparateTarget && <Typography variant="caption" color="text.secondary">下方单独展示定位的评论；展开记录后会自动合并。</Typography>}
-                    </Stack></Paper>}
-                    {reply.kind !== "reply" ? <Stack direction="row" spacing={2} sx={{ alignItems: "center", py: 1, pl: 2 }}>
-                        <Avatar sx={{ width: 32, height: 32, fontSize: 16, bgcolor: reply.kind === "status" ? (reply.details.after === "Open" ? "var(--positive-bg)" : reply.details.stateReason === "completed" ? "var(--done-bg)" : "var(--neutral-bg)") : "var(--timeline-bg)", color: reply.kind === "status" ? "common.white" : "text.secondary" }}>
-                            {reply.kind === "status" ? (reply.details.after === "Open" ? "○" : reply.details.stateReason === "completed" ? "✓" : "−") : "•"}
-                        </Avatar>
-                        <Stack spacing={0.5} sx={{ minWidth: 0 }}>
-                            <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-                                <Box component="span" sx={{ fontWeight: 700 }}>{reply.actorName ?? "匿名"}</Box>{" "}
-                                {reply.kind === "status" ? (reply.details.after === "Open" ? "重新打开了工单" : (reply.details.before === "Closed" ? "更改了关闭原因 (" : "关闭了工单 (") + (reply.details.stateReason === "completed" ? "已完成" : "已关闭") + ")")
-                                    : reply.kind === "priority" ? "将优先级从 " + reply.details.before + " 改为 " + reply.details.after
-                                    : reply.kind === "assignment" ? "更新了负责人"
-                                    : reply.kind === "reply_edited" ? "编辑了评论 #" + reply.details.replyId : "删除了评论 #" + reply.details.replyId}
-                            </Typography>
-                            {reply.kind === "assignment" && assignmentRoles.map(role => {
-                                const removed = reply.details.before.filter(member => member.role === role && !reply.details.after.some(next => next.userId === member.userId && next.role === role));
-                                const added = reply.details.after.filter(member => member.role === role && !reply.details.before.some(previous => previous.userId === member.userId && previous.role === role));
-                                return (removed.length > 0 || added.length > 0) && <Typography key={role} variant="body2" sx={{ overflowWrap: "anywhere" }}>
-                                    {assignmentLabels[role]}：{removed.length > 0 && "移除 " + removed.map(member => member.name).join("、")}
-                                    {removed.length > 0 && added.length > 0 && "；"}{added.length > 0 && "指派 " + added.map(member => member.name).join("、")}
-                                </Typography>;
-                            })}
-                            <Typography component="time" dateTime={reply.createdAt} variant="caption" color="text.secondary">{new Date(reply.createdAt).toLocaleString("sv-SE")}</Typography>
-                        </Stack>
-                    </Stack> : <Card id={"reply-" + reply.id} variant="outlined" sx={{ boxShadow: "none", borderRadius: 1, borderColor: String(reply.id) === target ? "primary.main" : "divider" }}>
-                        <CardHeader avatar={<Avatar>{reply.authorName.slice(0, 1)}</Avatar>} title={reply.authorName} subheader={new Date(reply.createdAt).toLocaleString("sv-SE")}
-                            action={reply.authorId === issue.authorId ? <Chip label="作者" size="small" variant="outlined" /> : undefined} sx={{ bgcolor: "var(--surface-muted)" }} />
-                        <Divider />
-                        <CardContent><Stack spacing={2}>
-                            {editing === reply.id ? <EditReplyForm reply={reply} saving={saving} onCancel={() => setEditing(null)} onSave={async (description, retainedImages, images, version) => {
-                                if (saving) return;
-                                const pageUrl = window.location.href;
-                                const historyIndex = window.history.state?.aldarisIndex;
-                                setSaving(true);
-                                setError("");
-                                const body = new FormData();
-                                body.set("description", description);
-                                for (const key of retainedImages) body.append("retainedImages", key);
-                                for (const file of images) body.append("images", file);
-                                try {
-                                    await api(`/api/replies/${reply.id}`, { method: "PATCH", headers: { "If-Match": `"${version}"` }, body, expectedSession: apiSession });
-                                    assertApiSession(apiSession);
-                                    if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return;
-                                    setEditing(null);
-                                    setRefresh(value => value + 1);
-                                } finally { setSaving(false); }
-                            }} /> : <Content description={reply.description} images={reply.images} clearedImages={reply.clearedImages} mentions={reply.mentions} />}
-                            {(user?.id === reply.authorId || user?.role === "admin") && editing !== reply.id && <Stack direction="row" spacing={1}>
-                                <Button variant="text" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
-                                    setEditing(reply.id);
-                                    setError("");
-                                }}>编辑</Button>
-                                <Button variant="text" color="error" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
-                                    setError("");
-                                    setDeleteConflict(false);
-                                    setDeletePreview(null);
-                                    setDeleting({ id: reply.id, version: reply.version });
-                                }}>删除</Button>
-                            </Stack>}
-                        </Stack>
-                    </CardContent></Card>}</Fragment>)}
-                    {user ? <ReplyForm issueId={id} saving={saving} blocked={loading || detailLoading || !!loadError || !!detailError} editing={editing !== null} onStatus={async (status, reason, replied) => {
-                        if (!canEdit) return;
-                        const changed = await updateIssue("status", status, reason);
-                        if (!changed && replied) setError("回复已发表，但工单状态更新失败。请核对最新属性后重试状态操作，无需重复发表回复。");
-                    }} onReply={async (description, images, key) => {
-                        const pageUrl = window.location.href;
-                        const historyIndex = window.history.state?.aldarisIndex;
-                        setSaving(true);
-                        setError("");
-                        const body = new FormData();
-                        body.set("description", description);
-                        for (const file of images) body.append("images", file);
-                        try {
-                            const response = await api(`/api/issues/${id}/replies`, { method: "POST", headers: { "Idempotency-Key": key }, body, expectedSession: apiSession });
-                            const created: { id: number } = await response.json();
-                            assertApiSession(apiSession);
-                            if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return true;
-                            setTarget(String(created.id));
-                            window.history.replaceState(window.history.state, "", `/#/issues/${id}?reply=${created.id}`);
-                            const replyUrl = window.location.href;
-                            requestAnimationFrame(() => {
-                                if (mounted.current && window.location.href === replyUrl && window.history.state?.aldarisIndex === historyIndex && getApiSessionGeneration() === apiSession) {
-                                    window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
-                                }
-                            });
-                            setRefresh((value) => value + 1);
-                            return true;
-                        } catch (error) {
-                            if (mounted.current) setError(`回复失败：${String(error)}`);
-                            return false;
-                        } finally {
-                            if (mounted.current) setSaving(false);
-                        }
-                    }}>
-                        {(hasContent, submitStatus, disabled) => canEdit && <>
-                            <ButtonGroup variant="outlined" disabled={disabled} sx={{ flexShrink: 0 }}>
-                                <Button type="button" sx={{ whiteSpace: "nowrap" }} onClick={() => void submitStatus(issue.status === "Open" ? "Closed" : "Open", closeReason)}
-                                    startIcon={<Box component="span" aria-hidden="true" sx={{ lineHeight: 1, color: issue.status === "Closed" ? "success.main" : closeReason === "completed" ? "secondary.main" : "text.secondary" }}>{issue.status === "Closed" ? "○" : closeReason === "completed" ? "✓" : "−"}</Box>}>
-                                    {hasContent ? "回复并" : ""}{issue.status === "Closed" ? "重新打开" : closeReason === "completed" ? "关闭工单" : "关闭为不计划处理"}
-                                </Button>
-                                <Button type="button" sx={{ px: 1, minWidth: "36px !important", flex: "0 0 36px" }} aria-label={issue.status === "Closed" ? "更改关闭原因" : "选择关闭原因"} aria-haspopup="menu" aria-controls={closeMenu ? "close-reason-menu" : undefined} aria-expanded={Boolean(closeMenu)} onClick={event => setCloseMenu(event.currentTarget)}>▾</Button>
-                            </ButtonGroup>
-                            <Menu id="close-reason-menu" anchorEl={closeMenu} open={Boolean(closeMenu)} onClose={() => setCloseMenu(null)}>
-                                {(["completed", "not_planned"] as const).map(reason => <MenuItem key={reason} role="menuitemradio" aria-checked={(issue.status === "Closed" ? issue.stateReason : closeReason) === reason}
-                                    selected={(issue.status === "Closed" ? issue.stateReason : closeReason) === reason} disabled={disabled || (issue.status === "Closed" && issue.stateReason === reason)}
-                                    onClick={() => {
-                                        setCloseMenu(null);
-                                        if (issue.status === "Closed") void updateIssue("status", "Closed", reason);
-                                        else setCloseReason(reason);
-                                    }}>
-                                    <Box component="span" aria-hidden="true" sx={{ color: reason === "completed" ? "secondary.main" : "text.secondary", mr: 1.5 }}>{reason === "completed" ? "✓" : "−"}</Box>
-                                    <Box><Typography>{reason === "completed" ? "已完成" : "不计划处理"}</Typography><Typography variant="caption" color="text.secondary">{reason === "completed" ? "问题已解决，工作已完成" : "不再处理此问题"}</Typography></Box>
-                                </MenuItem>)}
-                            </Menu>
-                        </>}
-                    </ReplyForm> : <Box><Button variant="outlined" href={`/#/login?next=/issues/${id}`}>登录后回复</Button></Box>}
+                        {replies.map((reply, index) => <Fragment key={reply.kind + reply.id}>
+                            {index === 10 && hiddenCount > 0 && <Paper id="timeline-gap" variant="outlined" sx={{ p: 2 }}><Stack spacing={1}>
+                                <Typography variant="body2">中间还有 {hiddenCount} 条记录未展开 (共 {total} 条)。</Typography>
+                                <Button disabled={saving || loading || expanding || editing !== null} onClick={() => void expand()}>{expanding ? "正在展开…" : "展开较早的 20 条记录"}</Button>
+                                {hasSeparateTarget && <Typography variant="caption" color="text.secondary">下方单独展示定位的评论；展开记录后会自动合并。</Typography>}
+                            </Stack></Paper>}
+                            {reply.kind !== "reply" ? <Stack direction="row" spacing={2} sx={{ alignItems: "center", py: 1, pl: 2 }}>
+                                <Avatar sx={{ width: 32, height: 32, fontSize: 16, bgcolor: reply.kind === "status" ? (reply.details.after === "Open" ? "var(--positive-bg)" : reply.details.stateReason === "completed" ? "var(--done-bg)" : "var(--neutral-bg)") : "var(--timeline-bg)", color: reply.kind === "status" ? "common.white" : "text.secondary" }}>
+                                    {reply.kind === "status" ? (reply.details.after === "Open" ? "○" : reply.details.stateReason === "completed" ? "✓" : "−") : "•"}
+                                </Avatar>
+                                <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                                    <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                                        <Box component="span" sx={{ fontWeight: 700 }}>{reply.actorName ?? "匿名"}</Box>{" "}
+                                        {reply.kind === "status" ? (reply.details.after === "Open" ? "重新打开了工单" : (reply.details.before === "Closed" ? "更改了关闭原因 (" : "关闭了工单 (") + (reply.details.stateReason === "completed" ? "已完成" : "已关闭") + ")")
+                                            : reply.kind === "priority" ? "将优先级从 " + reply.details.before + " 改为 " + reply.details.after
+                                                : reply.kind === "assignment" ? "更新了负责人"
+                                                    : reply.kind === "reply_edited" ? "编辑了评论 #" + reply.details.replyId : "删除了评论 #" + reply.details.replyId}
+                                    </Typography>
+                                    {reply.kind === "assignment" && assignmentRoles.map(role => {
+                                        const removed = reply.details.before.filter(member => member.role === role && !reply.details.after.some(next => next.userId === member.userId && next.role === role));
+                                        const added = reply.details.after.filter(member => member.role === role && !reply.details.before.some(previous => previous.userId === member.userId && previous.role === role));
+                                        return (removed.length > 0 || added.length > 0) && <Typography key={role} variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                                            {assignmentLabels[role]}：{removed.length > 0 && "移除 " + removed.map(member => member.name).join("、")}
+                                            {removed.length > 0 && added.length > 0 && "；"}{added.length > 0 && "指派 " + added.map(member => member.name).join("、")}
+                                        </Typography>;
+                                    })}
+                                    <Typography component="time" dateTime={reply.createdAt} variant="caption" color="text.secondary">{new Date(reply.createdAt).toLocaleString("sv-SE")}</Typography>
+                                </Stack>
+                            </Stack> : <Card id={"reply-" + reply.id} variant="outlined" sx={{ boxShadow: "none", borderRadius: 1, borderColor: String(reply.id) === target ? "primary.main" : "divider" }}>
+                                <CardHeader avatar={<Avatar>{reply.authorName.slice(0, 1)}</Avatar>} title={reply.authorName} subheader={new Date(reply.createdAt).toLocaleString("sv-SE")}
+                                    action={reply.authorId === issue.authorId ? <Chip label="作者" size="small" variant="outlined" /> : undefined} sx={{ bgcolor: "var(--surface-muted)" }} />
+                                <Divider />
+                                <CardContent><Stack spacing={2}>
+                                    {editing === reply.id ? <EditReplyForm reply={reply} saving={saving} onCancel={() => setEditing(null)} onSave={async (description, retainedImages, images, version) => {
+                                        if (saving) return;
+                                        const pageUrl = window.location.href;
+                                        const historyIndex = window.history.state?.aldarisIndex;
+                                        setSaving(true);
+                                        setError("");
+                                        const body = new FormData();
+                                        body.set("description", description);
+                                        for (const key of retainedImages) body.append("retainedImages", key);
+                                        for (const file of images) body.append("images", file);
+                                        try {
+                                            await api(`/api/replies/${reply.id}`, { method: "PATCH", headers: { "If-Match": `"${version}"` }, body, expectedSession: apiSession });
+                                            assertApiSession(apiSession);
+                                            if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return;
+                                            setEditing(null);
+                                            setRefresh(value => value + 1);
+                                        } finally { setSaving(false); }
+                                    }} /> : <Content description={reply.description} images={reply.images} clearedImages={reply.clearedImages} mentions={reply.mentions} />}
+                                    {(user?.id === reply.authorId || user?.role === "admin") && editing !== reply.id && <Stack direction="row" spacing={1}>
+                                        <Button variant="text" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
+                                            setEditing(reply.id);
+                                            setError("");
+                                        }}>编辑</Button>
+                                        <Button variant="text" color="error" disabled={saving || loading || editing !== null || editingAssignee} onClick={() => {
+                                            setError("");
+                                            setDeleteConflict(false);
+                                            setDeletePreview(null);
+                                            setDeleting({ id: reply.id, version: reply.version });
+                                        }}>删除</Button>
+                                    </Stack>}
+                                </Stack>
+                                </CardContent></Card>}</Fragment>)}
+                        {user ? <ReplyForm issueId={id} saving={saving} blocked={loading || detailLoading || !!loadError || !!detailError} editing={editing !== null} onStatus={async (status, reason, replied) => {
+                            if (!canEdit) return;
+                            const changed = await updateIssue("status", status, reason);
+                            if (!changed && replied) setError("回复已发表，但工单状态更新失败。请核对最新属性后重试状态操作，无需重复发表回复。");
+                        }} onReply={async (description, images, key) => {
+                            const pageUrl = window.location.href;
+                            const historyIndex = window.history.state?.aldarisIndex;
+                            setSaving(true);
+                            setError("");
+                            const body = new FormData();
+                            body.set("description", description);
+                            for (const file of images) body.append("images", file);
+                            try {
+                                const response = await api(`/api/issues/${id}/replies`, { method: "POST", headers: { "Idempotency-Key": key }, body, expectedSession: apiSession });
+                                const created: { id: number } = await response.json();
+                                assertApiSession(apiSession);
+                                if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return true;
+                                setTarget(String(created.id));
+                                window.history.replaceState(window.history.state, "", `/#/issues/${id}?reply=${created.id}`);
+                                const replyUrl = window.location.href;
+                                requestAnimationFrame(() => {
+                                    if (mounted.current && window.location.href === replyUrl && window.history.state?.aldarisIndex === historyIndex && getApiSessionGeneration() === apiSession) {
+                                        window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+                                    }
+                                });
+                                setRefresh((value) => value + 1);
+                                return true;
+                            } catch (error) {
+                                if (mounted.current) setError(`回复失败：${String(error)}`);
+                                return false;
+                            } finally {
+                                if (mounted.current) setSaving(false);
+                            }
+                        }}>
+                            {(hasContent, submitStatus, disabled) => canEdit && <>
+                                <ButtonGroup variant="outlined" disabled={disabled} sx={{ flexShrink: 0 }}>
+                                    <Button type="button" sx={{ whiteSpace: "nowrap" }} onClick={() => void submitStatus(issue.status === "Open" ? "Closed" : "Open", closeReason)}
+                                        startIcon={<Box component="span" aria-hidden="true" sx={{ lineHeight: 1, color: issue.status === "Closed" ? "success.main" : closeReason === "completed" ? "secondary.main" : "text.secondary" }}>{issue.status === "Closed" ? "○" : closeReason === "completed" ? "✓" : "−"}</Box>}>
+                                        {hasContent ? "回复并" : ""}{issue.status === "Closed" ? "重新打开" : closeReason === "completed" ? "关闭工单" : "关闭为不计划处理"}
+                                    </Button>
+                                    <Button type="button" sx={{ px: 1, minWidth: "36px !important", flex: "0 0 36px" }} aria-label={issue.status === "Closed" ? "更改关闭原因" : "选择关闭原因"} aria-haspopup="menu" aria-controls={closeMenu ? "close-reason-menu" : undefined} aria-expanded={Boolean(closeMenu)} onClick={event => setCloseMenu(event.currentTarget)}>▾</Button>
+                                </ButtonGroup>
+                                <Menu id="close-reason-menu" anchorEl={closeMenu} open={Boolean(closeMenu)} onClose={() => setCloseMenu(null)}>
+                                    {(["completed", "not_planned"] as const).map(reason => <MenuItem key={reason} role="menuitemradio" aria-checked={(issue.status === "Closed" ? issue.stateReason : closeReason) === reason}
+                                        selected={(issue.status === "Closed" ? issue.stateReason : closeReason) === reason} disabled={disabled || (issue.status === "Closed" && issue.stateReason === reason)}
+                                        onClick={() => {
+                                            setCloseMenu(null);
+                                            if (issue.status === "Closed") void updateIssue("status", "Closed", reason);
+                                            else setCloseReason(reason);
+                                        }}>
+                                        <Box component="span" aria-hidden="true" sx={{ color: reason === "completed" ? "secondary.main" : "text.secondary", mr: 1.5 }}>{reason === "completed" ? "✓" : "−"}</Box>
+                                        <Box><Typography>{reason === "completed" ? "已完成" : "不计划处理"}</Typography><Typography variant="caption" color="text.secondary">{reason === "completed" ? "问题已解决，工作已完成" : "不再处理此问题"}</Typography></Box>
+                                    </MenuItem>)}
+                                </Menu>
+                            </>}
+                        </ReplyForm> : <Box><Button variant="outlined" href={`/#/login?next=/issues/${id}`}>登录后回复</Button></Box>}
                     </Stack>
                 </Stack>
                 <Paper component="aside" variant="outlined" sx={{ p: 2.5, position: { md: "sticky" }, top: 24 }}>

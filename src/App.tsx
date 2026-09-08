@@ -287,11 +287,11 @@ export default function App() {
                         {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{error}</Alert>}
                         {pathname === "/license" ? <LicensePage /> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={locationSearch} />
                             : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
-                            : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
-                            : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
-                            : pathname === "/login" || pathname === "/account" || pathname === "/admin/users/new"
-                                ? <AuthPage key={pathname} mode={pathname === "/admin/users/new" ? "create-user" : pathname.slice(1) as "login" | "account"} user={pageUser} onUserChange={handleUserChange} />
-                                : <Typography component="h1" variant="h5">页面不存在。</Typography>}</Box>}
+                                : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
+                                    : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
+                                        : pathname === "/login" || pathname === "/account" || pathname === "/admin/users/new"
+                                            ? <AuthPage key={pathname} mode={pathname === "/admin/users/new" ? "create-user" : pathname.slice(1) as "login" | "account"} user={pageUser} onUserChange={handleUserChange} />
+                                            : <Typography component="h1" variant="h5">页面不存在。</Typography>}</Box>}
                         <Stack component="footer" direction="row" spacing={1} useFlexGap sx={{
                             justifyContent: "center", flexWrap: "wrap", pt: 2,
                             "& a": {
