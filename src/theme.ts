@@ -100,6 +100,9 @@ const theme = createTheme({
                     color: theme.vars!.palette.text.primary, backgroundColor: "var(--control-bg)", border: "1px solid", borderColor: theme.vars!.palette.divider,
                     "&:hover": { backgroundColor: "var(--control-hover)" }, "&:active": { backgroundColor: "var(--control-active)" },
                 },
+                "&.MuiButton-contained.MuiButton-sizeSmall": { padding: "3px 9px" },
+                "&.MuiButton-contained.MuiButton-sizeMedium": { padding: "5px 15px" },
+                "&.MuiButton-contained.MuiButton-sizeLarge": { padding: "7px 21px" },
                 "&.MuiButton-contained.MuiButton-colorPrimary, &.MuiButton-contained.MuiButton-colorSuccess": {
                     color: "#ffffff", backgroundColor: "var(--positive-bg)", borderColor: "var(--emphasis-border)",
                     "&:hover": { backgroundColor: "var(--positive-hover)" }, "&:active": { backgroundColor: "var(--positive-active)" },

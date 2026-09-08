@@ -247,7 +247,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         {(hasContent, submitStatus, disabled) => canEdit && <>
                             <ButtonGroup variant="outlined" disabled={disabled} sx={{ flexShrink: 0 }}>
                                 <Button type="button" sx={{ whiteSpace: "nowrap" }} onClick={() => void submitStatus(issue.status === "Open" ? "Closed" : "Open", closeReason)}
-                                    startIcon={<Box component="span" aria-hidden="true" sx={{ color: issue.status === "Closed" ? "success.main" : closeReason === "completed" ? "secondary.main" : "text.secondary" }}>{issue.status === "Closed" ? "○" : closeReason === "completed" ? "✓" : "−"}</Box>}>
+                                    startIcon={<Box component="span" aria-hidden="true" sx={{ lineHeight: 1, color: issue.status === "Closed" ? "success.main" : closeReason === "completed" ? "secondary.main" : "text.secondary" }}>{issue.status === "Closed" ? "○" : closeReason === "completed" ? "✓" : "−"}</Box>}>
                                     {hasContent ? "回复并" : ""}{issue.status === "Closed" ? "重新打开" : closeReason === "completed" ? "关闭工单" : "关闭为不计划处理"}
                                 </Button>
                                 <Button type="button" sx={{ px: 1, minWidth: "36px !important", flex: "0 0 36px" }} aria-label={issue.status === "Closed" ? "更改关闭原因" : "选择关闭原因"} aria-haspopup="menu" aria-controls={closeMenu ? "close-reason-menu" : undefined} aria-expanded={Boolean(closeMenu)} onClick={event => setCloseMenu(event.currentTarget)}>▾</Button>

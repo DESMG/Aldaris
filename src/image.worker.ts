@@ -16,7 +16,7 @@ async function prepareImage(file: File) {
     if (file.size > IMAGE_SOURCE_MAX_BYTES) throw new Error("图片过大，请先自行缩小。");
     const bytes = new Uint8Array(await file.arrayBuffer());
     const info = inspectSourceImage(bytes, file.type);
-    const moduleUrl = "/libwebp/cwebp.mjs";
+    const moduleUrl = new URL("/libwebp/cwebp.mjs", self.location.origin).href;
     const { default: createCWebP } = await import(/* @vite-ignore */ moduleUrl);
     const encoder: CWebP = await createCWebP();
     encoder.FS.writeFile("input", bytes);
