@@ -104,7 +104,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     return <Stack spacing={3}>
         <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
             <Typography component="h1" variant="h5">用户管理</Typography>
-            <Button href="/admin/users/new" variant="contained">创建用户</Button>
+            <Button href="/#/admin/users/new" variant="contained">创建用户</Button>
         </Stack>
         {draft.error && <Alert severity="error">{draft.error}</Alert>}
         {loading && users.length === 0 && <Typography role="status">正在读取用户…</Typography>}

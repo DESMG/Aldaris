@@ -11,7 +11,7 @@ export default function LicensePage() {
             <Typography><Link href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">获取 Aldaris 源代码</Link></Typography>
             <Typography><Link href="https://github.com/DESMG/Aldaris/blob/main/LICENSE" target="_blank" rel="external noopener noreferrer nofollow">项目许可证全文</Link></Typography>
             <Typography><Link href="https://github.com/DESMG/Aldaris/blob/main/third_party/README.md" target="_blank" rel="external noopener noreferrer nofollow">第三方组件与许可链接</Link></Typography>
-            <Button href="/" variant="contained" sx={{ alignSelf: "center" }}>我已知晓</Button>
+            <Button href="/#/" variant="contained" sx={{ alignSelf: "center" }}>我已知晓</Button>
         </Stack>
     </Paper>;
 }

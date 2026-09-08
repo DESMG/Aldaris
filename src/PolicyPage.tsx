@@ -22,7 +22,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
         }}>
             <Typography variant="h4" component="h1">{kind === "privacy" ? "隐私政策" : "使用条款"}</Typography>
             {kind === "privacy" ? <>
-                <Typography>本隐私政策说明 Aldaris 在提供团队工单协作服务时如何收集、使用、保存和共享信息，以及您可以如何管理相关数据。请在登录、提交内容或管理账户前阅读本政策，并同时阅读<Link href="/terms">使用条款</Link>。</Typography>
+                <Typography>本隐私政策说明 Aldaris 在提供团队工单协作服务时如何收集、使用、保存和共享信息，以及您可以如何管理相关数据。请在登录、提交内容或管理账户前阅读本政策，并同时阅读<Link href="/#/terms">使用条款</Link>。</Typography>
                 <Alert severity="warning">工单、评论和图片对同一站点内的已登录成员可见。图片可能因容量不足而自动清理；删除账户不会一并删除历史协作内容。请勿提交密码、访问凭据或不适合向全体成员公开的信息。</Alert>
 
                 <Typography component="h2" variant="h6">一、适用范围与管理责任</Typography>
@@ -79,8 +79,8 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography>数据处理方式或服务功能变化时，本政策应相应更新。重要变化应由运营者通过团队约定的渠道说明，并按适用要求取得必要授权。请结合本站公开政策及运营者说明了解实际处理方式。</Typography>
                 <Typography>隐私、账户资料、数据副本、删除或安全问题，请通过取得账户时使用的团队渠道联系管理员；涉及基础设施或运营主体的问题，请要求转交运营者。仅提供定位问题所需的信息，请勿发送密码、完整登录凭据或无关个人资料。</Typography>
             </> : <>
-                <Typography>Aldaris 采用 GNU Affero General Public License 第 3 版 (AGPL-3.0-only) 授权，仅适用第 3 版。您可以依照许可证获取、修改和再分发本软件。本使用条款不限制该许可证授予您的软件权利。请参阅<Link href="/license">开源许可</Link>及<Link href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">源代码</Link>。</Typography>
-                <Typography>本使用条款适用于当前 Aldaris 团队工单协作站点。请在使用账户和提交内容前完整阅读，并结合<Link href="/privacy">隐私政策</Link>了解信息处理方式。若无法接受本服务的共享范围或留存方式，请先联系管理员安排其他协作方式。</Typography>
+                <Typography>Aldaris 采用 GNU Affero General Public License 第 3 版 (AGPL-3.0-only) 授权，仅适用第 3 版。您可以依照许可证获取、修改和再分发本软件。本使用条款不限制该许可证授予您的软件权利。请参阅<Link href="/#/license">开源许可</Link>及<Link href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">源代码</Link>。</Typography>
+                <Typography>本使用条款适用于当前 Aldaris 团队工单协作站点。请在使用账户和提交内容前完整阅读，并结合<Link href="/#/privacy">隐私政策</Link>了解信息处理方式。若无法接受本服务的共享范围或留存方式，请先联系管理员安排其他协作方式。</Typography>
                 <Alert severity="warning">本站供单个团队内部协作，工单内容对同一部署内的已登录成员可见。本站不承诺持续可用、永久保存或恢复数据；容量不足时，尚未完成的工单图片也可能被自动清理。</Alert>
 
                 <Typography component="h2" variant="h6">一、服务范围与条款适用</Typography>
@@ -120,7 +120,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
 
                 <Typography component="h2" variant="h6">八、内容修改与停止使用</Typography>
                 <Typography>评论作者或管理员可以按权限编辑和删除评论，相关行为会留下记录。需要更正其他内容或处理资料删除请求时，请联系管理员；页面未提供功能不表示可以擅自绕过权限修改数据。</Typography>
-                <Typography>管理员可以管理账户，并处理违反团队管理要求的行为。删除账户不会自动删除工单、评论及历史记录，其中仍可能保留个人信息，具体范围见<Link href="/privacy">隐私政策</Link>。</Typography>
+                <Typography>管理员可以管理账户，并处理违反团队管理要求的行为。删除账户不会自动删除工单、评论及历史记录，其中仍可能保留个人信息，具体范围见<Link href="/#/privacy">隐私政策</Link>。</Typography>
                 <Typography>您可以停止使用并联系管理员处理账户。退出、停止使用或删除账户，不会收回其他成员保存的副本，也不免除此前使用产生的内容责任及依法应继续承担的保密义务。</Typography>
 
                 <Typography component="h2" variant="h6">九、第三方服务与外部链接</Typography>
@@ -142,7 +142,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
             </>}
         </Stack>
         <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-            <Button href="/" variant="contained">我已知晓</Button>
+            <Button href="/#/" variant="contained">我已知晓</Button>
         </Box>
     </Paper>;
 }

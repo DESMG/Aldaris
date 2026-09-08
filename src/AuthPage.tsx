@@ -27,7 +27,9 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
     const clearGuard = useDraftGuard(mode === "create-user" && (dirty || !!draft.value.name || !!draft.value.username), draft.clear);
     const mounted = useRef(true);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-    const next = new URLSearchParams(window.location.search).get("next") ?? "/";
+    const path = window.location.hash.slice(1) || "/";
+    const params = new URLSearchParams(path.includes("?") ? path.slice(path.indexOf("?")) : "");
+    const next = params.get("next") ?? "/";
     const destination = ["/account", "/admin/users", "/admin/users/new", "/operations", "/privacy", "/terms", "/license"].includes(next)
         || /^\/issues\/\d+(?:\?reply=\d+)?$/.test(next) || /^\/(?:\?[^#]*)?$/.test(next) ? next : "/";
     const title = mode === "create-user" ? "创建用户" : mode === "account" ? "修改密码" : "登录";
@@ -37,12 +39,12 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
     }
 
     if (mode === "account" && !user) {
-        return <Button href="/login?next=/account">登录后管理账户</Button>;
+        return <Button href="/#/login?next=/account">登录后管理账户</Button>;
     }
     if (mode === "login" && user) {
         return <Stack spacing={2}>
             <Typography>已登录为 {user.name}</Typography>
-            <Button href={destination}>继续浏览</Button>
+            <Button href={`/#${destination}`}>继续浏览</Button>
         </Stack>;
     }
 
@@ -102,9 +104,9 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
             <Stack spacing={2}>
                 <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                     <Typography component="h1" variant="h5">{title}</Typography>
-                    {mode === "create-user" && <Button href="/admin/users" color="inherit" variant="outlined" disabled={saving}>← 返回用户管理</Button>}
+                    {mode === "create-user" && <Button href="/#/admin/users" color="inherit" variant="outlined" disabled={saving}>← 返回用户管理</Button>}
                 </Stack>
-                {mode === "login" && new URLSearchParams(window.location.search).has("passwordChanged") && <Alert severity="success">密码已修改，请重新登录。</Alert>}
+                {mode === "login" && params.has("passwordChanged") && <Alert severity="success">密码已修改，请重新登录。</Alert>}
                 {error && <Alert severity="error">{error}</Alert>}
                 {draft.error && <Alert severity="error">{draft.error}</Alert>}
                 {success && <Alert severity="success">{success}</Alert>}

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#0d1117" />
+        <meta name="color-scheme" content="dark light" />
+        <meta name="application-title" content="问题管理系统" />
+        <meta name="application-name" content="问题管理系统" />
+        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
+        <link rel="dns-prefetch" href="https://fonts.gstatic.com" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&display=swap" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" crossorigin="anonymous" referrerpolicy="no-referrer" />
+        <title>404 - 页面不存在 - 问题管理系统</title>
+        <script>
+            const mode = localStorage.getItem("theme") || "dark";
+            const light = mode === "light" || (mode === "system" && matchMedia("(prefers-color-scheme: light)").matches);
+            document.documentElement.classList.toggle("light", light);
+            document.querySelector('meta[name="theme-color"]').setAttribute("content", light ? "#ffffff" : "#0d1117");
+        </script>
+        <style>
+            :root {
+                color-scheme: dark;
+                --background: #0d1117;
+                --text: #f0f6fc;
+                --text-secondary: #9198a1;
+                --primary: #4493f8;
+                --divider: #3d444d;
+                --surface-muted: #151b23;
+                --control-bg: #212830;
+                --control-hover: #262c36;
+                --control-active: #2a313c;
+                --positive-bg: #238636;
+                --positive-hover: #29903b;
+                --positive-active: #2e9a40;
+                --emphasis-border: #ffffff26;
+                --selected: #656c7633;
+                --focus: #4493f826;
+            }
+            :root.light {
+                color-scheme: light;
+                --background: #ffffff;
+                --text: #1f2328;
+                --text-secondary: #59636e;
+                --primary: #0969da;
+                --divider: #d1d9e0;
+                --surface-muted: #f6f8fa;
+                --control-bg: #f6f8fa;
+                --control-hover: #eff2f5;
+                --control-active: #e6eaef;
+                --positive-bg: #1f883d;
+                --positive-hover: #1c8139;
+                --positive-active: #197935;
+                --emphasis-border: #1f232826;
+                --selected: #818b9826;
+                --focus: #0969da26;
+            }
+            *, *::before, *::after { box-sizing: border-box; }
+            html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; -webkit-text-size-adjust: 100%; }
+            body {
+                margin: 0;
+                min-height: 100dvh;
+                font-family: "JetBrains Mono", "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", system-ui, -apple-system, emoji, monospace;
+                font-size: 0.875rem;
+                line-height: 1.5;
+                background: var(--background);
+                color: var(--text);
+            }
+            main { width: 100%; max-width: 1200px; margin: 0 auto; padding: 32px 16px; display: flex; flex-direction: column; gap: 24px; }
+            header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; padding: 20px; border: 1px solid var(--divider); border-radius: 8px; background: var(--surface-muted); }
+            a { color: var(--primary); text-decoration: none; }
+            .title { color: var(--text); font-size: 1.75rem; font-weight: 750; line-height: 1.235; overflow-wrap: anywhere; }
+            .message { display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 32px; border: 1px solid var(--divider); border-radius: 12px; text-align: center; animation: enterContent 360ms ease-out; }
+            h1 { margin: 0; font-size: 1.5rem; font-weight: 700; line-height: 1.334; }
+            p { margin: 0; color: var(--text-secondary); }
+            .button { display: inline-flex; align-items: center; justify-content: center; min-width: 64px; padding: 5px 15px; border: 1px solid var(--divider); border-radius: 8px; color: var(--text); background: var(--control-bg); font-weight: 650; line-height: 1.75; }
+            .button:hover { background: var(--control-hover); }
+            .button:active { background: var(--control-active); }
+            .primary { padding: 6px 16px; color: #ffffff; background: var(--positive-bg); border-color: var(--emphasis-border); }
+            .primary:hover { background: var(--positive-hover); }
+            .primary:active { background: var(--positive-active); }
+            footer { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; padding-top: 16px; }
+            footer a { display: inline-flex; align-items: center; justify-content: center; min-width: 64px; min-height: 40px; padding: 6px 16px; border-radius: 24px; font-weight: 650; line-height: 1.75; }
+            footer a:hover { background: var(--selected); }
+            :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+            ::selection { background: var(--focus); }
+            @media (min-width: 600px) {
+                main { padding-right: 24px; padding-left: 24px; }
+                header { padding: 28px; }
+            }
+            @keyframes enterContent {
+                from { opacity: 0; transform: translateY(6px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            @media (prefers-reduced-motion: reduce) {
+                *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <header>
+                <a class="title" href="/#/">问题管理系统</a>
+                <a class="button" href="/#/">← 返回列表</a>
+            </header>
+            <section class="message" aria-labelledby="not-found-title">
+                <h1 id="not-found-title">404 - 页面不存在</h1>
+                <p>请检查地址，或返回首页继续浏览。</p>
+                <a class="button primary" href="/#/">返回首页</a>
+            </section>
+            <footer>
+                <a href="/#/privacy">隐私政策</a>
+                <a href="/#/terms">使用条款</a>
+                <a href="/#/license">开源许可</a>
+                <a href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">源代码</a>
+            </footer>
+        </main>
+    </body>
+</html>

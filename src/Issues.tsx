@@ -11,7 +11,8 @@ import { assignmentLabels, assignmentRoles } from "../shared/assignments";
 
 type IssuesView = { status: "Open" | "Closed"; page: number };
 function readView(): IssuesView {
-    const params = new URLSearchParams(window.location.search);
+    const path = window.location.hash.slice(1) || "/";
+    const params = new URLSearchParams(path.includes("?") ? path.slice(path.indexOf("?")) : "");
     const page = Number(params.get("page") ?? "1");
     return { status: params.get("status") === "Closed" ? "Closed" : "Open", page: Number.isSafeInteger(page) && page > 0 ? page : 1 };
 }
@@ -37,7 +38,8 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
         if (page > 1) params.set("page", String(page));
         const query = params.toString();
         const next = "/" + (query ? `?${query}` : "");
-        if (window.location.pathname === "/" && next !== window.location.pathname + window.location.search) {
+        const path = window.location.hash.slice(1) || "/";
+        if (path.split("?")[0] === "/" && next !== path) {
             void navigate(next).then(confirmed => { if (!confirmed) setView(readView()); });
         }
     }, [status, page]);
@@ -107,7 +109,7 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
 
             <Stack spacing={2}>
                 {issues.map((issue) => (
-                    <Paper component="a" href={`/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
+                    <Paper component="a" href={`/#/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
                         <Stack spacing={2}>
                             <Typography
                                 title={`#${issue.id} ${issue.title}`}

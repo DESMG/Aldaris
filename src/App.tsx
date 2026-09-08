@@ -1,23 +1,23 @@
-import { lazy, StrictMode, Suspense, useEffect, useRef, useState } from "react";
-
+import { StrictMode, useEffect, useRef, useState } from "react";
 import { Alert, Avatar, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, GlobalStyles, IconButton, LinearProgress, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
 import Container from "@mui/material/Container";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
-import theme from "./theme";
-import ThemeToggle from "./ThemeToggle";
-import OperationEvents from "./OperationEvents";
-import { confirmDraftNavigation, discardDraftGuards, hasUnsavedDrafts } from "./DraftGuard";
-import Issues from "./Issues";
-import IssueDetail from "./IssueDetail";
-import AuthPage from "./AuthPage";
-import Users from "./Users";
-import PolicyPage from "./PolicyPage";
-import ConfirmDialog, { cancelConfirmation, confirmAction } from "./ConfirmDialog";
+
 import { api, navigate, getLoginSession, setLoginSession, synchronizeSession, LOGIN_STORAGE_KEY, getApiSessionGeneration, assertApiSession } from "./api";
 import type { User } from "./api";
+import theme from "./theme";
+import ThemeToggle from "./ThemeToggle";
+import { confirmDraftNavigation, discardDraftGuards, hasUnsavedDrafts } from "./DraftGuard";
+import ConfirmDialog, { cancelConfirmation, confirmAction } from "./ConfirmDialog";
 
-const LicensePage = lazy(() => import("./LicensePage"));
+import AuthPage from "./AuthPage";
+import Issues from "./Issues";
+import IssueDetail from "./IssueDetail";
+import LicensePage from "./LicensePage";
+import OperationEvents from "./OperationEvents";
+import PolicyPage from "./PolicyPage";
+import Users from "./Users";
 
 const slogans = [
     "唉，你竟堕落至此？曾几何时，你是我们最耀眼的希望，是我们最珍视的子嗣；如今，你却已与我们背道而驰，彻底迷失。你不仅自取沉沦，更将那些追随你的人也一同拖入了深渊。",
@@ -29,7 +29,7 @@ const slogans = [
 
 export default function App() {
     const apiSession = getApiSessionGeneration();
-    const [path, setPath] = useState(window.location.pathname + window.location.search);
+    const [path, setPath] = useState(window.location.hash.slice(1) || "/");
     const [sloganIndex, setSloganIndex] = useState(() => Math.floor(Math.random() * slogans.length));
     const sloganPath = useRef(path);
     const [user, setUser] = useState<User | null>(null);
@@ -41,6 +41,7 @@ export default function App() {
     const [pageVersion, setPageVersion] = useState(0);
     const [notice, setNotice] = useState("");
     const historyIndex = useRef(window.history.state?.aldarisIndex ?? 0);
+    const handledHistory = useRef({ url: window.location.href, index: historyIndex.current });
     const restoringHistory = useRef(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -50,8 +51,9 @@ export default function App() {
     const authController = useRef<AbortController | null>(null);
     const lastAuthCheck = useRef(0);
     const pathname = path.split("?")[0];
+    const locationSearch = path.includes("?") ? path.slice(path.indexOf("?") + 1) : "";
     const detail = pathname.match(/^\/issues\/(\d+)$/);
-    const replyTarget = new URLSearchParams(path.split("?")[1]).get("reply");
+    const replyTarget = new URLSearchParams(locationSearch).get("reply");
 
     function syncUser(nextUser: User | null) {
         const owner = pageUserRef.current;
@@ -81,7 +83,8 @@ export default function App() {
     useEffect(() => {
         if (!loading && !error && !user && !pausedAccount && !["/login", "/privacy", "/terms", "/license"].includes(pathname)) {
             const loginPath = `/login?next=${encodeURIComponent(path)}`;
-            window.history.replaceState(window.history.state, "", loginPath);
+            window.history.replaceState(window.history.state, "", `/#${loginPath}`);
+            handledHistory.current = { url: window.location.href, index: historyIndex.current };
             setPath(loginPath);
         }
     }, [loading, error, user, pausedAccount, pathname, path]);
@@ -90,9 +93,16 @@ export default function App() {
         window.history.replaceState({ ...window.history.state, aldarisIndex: historyIndex.current }, "");
         let pendingHistoryDelta = 0;
         let approvedHistory = false;
-        const route = (event: PopStateEvent) => {
+        const route = (event: PopStateEvent | HashChangeEvent) => {
+            let nextIndex = window.history.state?.aldarisIndex;
+            if (nextIndex == null) {
+                nextIndex = historyIndex.current + 1;
+                window.history.replaceState({ ...window.history.state, aldarisIndex: nextIndex }, "");
+            }
+            const nextUrl = window.location.href;
+            if (handledHistory.current.url === nextUrl && handledHistory.current.index === nextIndex) return;
+            handledHistory.current = { url: nextUrl, index: nextIndex };
             cancelConfirmation();
-            const nextIndex = window.history.state?.aldarisIndex ?? 0;
             if (restoringHistory.current) {
                 restoringHistory.current = false;
                 const delta = pendingHistoryDelta;
@@ -117,7 +127,7 @@ export default function App() {
                 setPausedAccount(null);
             }
             historyIndex.current = nextIndex;
-            setPath(window.location.pathname + window.location.search);
+            setPath(window.location.hash.slice(1) || "/");
         };
         const changed = () => {
             authController.current?.abort();
@@ -137,12 +147,14 @@ export default function App() {
         };
         const notify = (event: Event) => setNotice((event as CustomEvent<string>).detail);
         window.addEventListener("popstate", route);
+        window.addEventListener("hashchange", route);
         window.addEventListener("auth-session-changed", changed);
         window.addEventListener("storage", storage);
         window.addEventListener("focus", focus);
         window.addEventListener("app-notice", notify);
         return () => {
             window.removeEventListener("popstate", route);
+            window.removeEventListener("hashchange", route);
             window.removeEventListener("auth-session-changed", changed);
             window.removeEventListener("storage", storage);
             window.removeEventListener("focus", focus);
@@ -211,18 +223,20 @@ export default function App() {
                     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     const link = (event.target as Element).closest("a");
                     if (!link || link.origin !== window.location.origin || link.target || link.hasAttribute("download")) return;
-                    if (link.hash) return;
-                    if (!["/", "/login", "/account", "/privacy", "/terms", "/license", "/operations", "/admin/users", "/admin/users/new"].includes(link.pathname)
-                        && !/^\/issues\/\d+$/.test(link.pathname)) return;
+                    if (link.pathname !== "/" || link.search || !link.hash.startsWith("#/")) return;
+                    const nextPath = link.hash.slice(1);
+                    const nextPathname = nextPath.split("?")[0];
+                    if (!["/", "/login", "/account", "/privacy", "/terms", "/license", "/operations", "/admin/users", "/admin/users/new"].includes(nextPathname)
+                        && !/^\/issues\/\d+$/.test(nextPathname)) return;
                     event.preventDefault();
-                    navigate(link.pathname + link.search + link.hash);
+                    navigate(nextPath);
                 }}>
                     <Stack spacing={3} sx={{ width: "100%", ...(pathname === "/login" ? { maxWidth: 440 } : {}) }}>
                         {pathname !== "/login" && <Box component="header" sx={{ p: { xs: 2.5, sm: 3.5 }, borderRadius: "8px", bgcolor: "var(--surface-muted)", border: "1px solid", borderColor: "divider" }}>
                             <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
                                 <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                                    <Typography component="a" href="/" variant="h4" sx={{ color: "text.primary", textDecoration: "none" }}>问题管理系统</Typography>
-                                    {pathname !== "/" && <Button href="/" color="inherit" variant="outlined">← 返回列表</Button>}
+                                    <Typography component="a" href="/#/" variant="h4" sx={{ color: "text.primary", textDecoration: "none" }}>问题管理系统</Typography>
+                                    {pathname !== "/" && <Button href="/#/" color="inherit" variant="outlined">← 返回列表</Button>}
                                 </Stack>
                                 <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                                     <ThemeToggle />
@@ -236,9 +250,9 @@ export default function App() {
                                                 <Typography variant="caption" color="text.secondary">{user.role === "admin" ? "管理员" : "用户"}</Typography>
                                             </Box>
                                             <Divider />
-                                            <MenuItem component="a" href="/account" onClick={() => setAccountAnchor(null)}>账户设置</MenuItem>
-                                            {user.role === "admin" && <MenuItem component="a" href="/admin/users" onClick={() => setAccountAnchor(null)}>用户管理</MenuItem>}
-                                            {user.role === "admin" && <MenuItem component="a" href="/operations" onClick={() => setAccountAnchor(null)}>操作记录</MenuItem>}
+                                            <MenuItem component="a" href="/#/account" onClick={() => setAccountAnchor(null)}>账户设置</MenuItem>
+                                            {user.role === "admin" && <MenuItem component="a" href="/#/admin/users" onClick={() => setAccountAnchor(null)}>用户管理</MenuItem>}
+                                            {user.role === "admin" && <MenuItem component="a" href="/#/operations" onClick={() => setAccountAnchor(null)}>操作记录</MenuItem>}
                                             <Divider />
                                             <MenuItem disabled={loggingOut} onClick={async () => {
                                                 setAccountAnchor(null);
@@ -250,7 +264,8 @@ export default function App() {
                                                     assertApiSession(apiSession);
                                                     discardDraftGuards();
                                                     handleUserChange(null);
-                                                    window.history.replaceState(window.history.state, "", "/login");
+                                                    window.history.replaceState(window.history.state, "", "/#/login");
+                                                    handledHistory.current = { url: window.location.href, index: historyIndex.current };
                                                     setPath("/login");
                                                 } catch (error) {
                                                     setError(`退出失败：${String(error)}`);
@@ -260,7 +275,7 @@ export default function App() {
                                             }}>{loggingOut ? "正在退出…" : "退出"}</MenuItem>
                                         </Menu>
                                     </> : !loading && <>
-                                        <Button color="inherit" href={`/login?next=${encodeURIComponent(pathname)}`}>登录</Button>
+                                        <Button color="inherit" href={`/#/login?next=${encodeURIComponent(path)}`}>登录</Button>
                                     </>}
                                 </Stack>
                             </Stack>
@@ -270,7 +285,7 @@ export default function App() {
                         </Box>}
                         {loading && <LinearProgress aria-label="读取登录状态" />}
                         {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{error}</Alert>}
-                        {pathname === "/license" ? <Suspense fallback={loading ? null : <LinearProgress aria-label="读取开源许可" />}><LicensePage /></Suspense> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={path.split("?")[1] ?? ""} />
+                        {pathname === "/license" ? <LicensePage /> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className="page-content">{pathname === "/" ? <Issues user={pageUser} locationSearch={locationSearch} />
                             : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
                             : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
                             : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
@@ -284,9 +299,9 @@ export default function App() {
                                 "&:hover, &[aria-current='page']": { bgcolor: "action.selected" },
                             },
                         }}>
-                            <Button href="/privacy" variant="text" aria-current={pathname === "/privacy" ? "page" : undefined}>隐私政策</Button>
-                            <Button href="/terms" variant="text" aria-current={pathname === "/terms" ? "page" : undefined}>使用条款</Button>
-                            <Button href="/license" variant="text" aria-current={pathname === "/license" ? "page" : undefined}>开源许可</Button>
+                            <Button href="/#/privacy" variant="text" aria-current={pathname === "/privacy" ? "page" : undefined}>隐私政策</Button>
+                            <Button href="/#/terms" variant="text" aria-current={pathname === "/terms" ? "page" : undefined}>使用条款</Button>
+                            <Button href="/#/license" variant="text" aria-current={pathname === "/license" ? "page" : undefined}>开源许可</Button>
                             <Button href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow" variant="text">源代码</Button>
                         </Stack>
                     </Stack>

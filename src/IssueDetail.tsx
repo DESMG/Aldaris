@@ -41,7 +41,8 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
     const canEdit = user !== null && issue !== null && (user.id === issue.authorId || user.role === "admin");
 
     async function updateIssue(field: "status" | "priority", value: string, stateReason = closeReason) {
-        if (!mounted.current || window.location.pathname !== `/issues/${id}` || updating.current || !issue) return false;
+        const pathname = (window.location.hash.slice(1) || "/").split("?")[0];
+        if (!mounted.current || pathname !== `/issues/${id}` || updating.current || !issue) return false;
         if (field === "priority" && priorityRank[value as Issue["priority"]] <= priorityRank[issue.priority]) {
             clearApiCache();
             setRefresh(value => value + 1);
@@ -227,7 +228,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                             assertApiSession(apiSession);
                             if (!mounted.current || window.location.href !== pageUrl || window.history.state?.aldarisIndex !== historyIndex) return true;
                             setTarget(String(created.id));
-                            window.history.replaceState(window.history.state, "", `/issues/${id}?reply=${created.id}`);
+                            window.history.replaceState(window.history.state, "", `/#/issues/${id}?reply=${created.id}`);
                             const replyUrl = window.location.href;
                             requestAnimationFrame(() => {
                                 if (mounted.current && window.location.href === replyUrl && window.history.state?.aldarisIndex === historyIndex && getApiSessionGeneration() === apiSession) {
@@ -264,7 +265,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                 </MenuItem>)}
                             </Menu>
                         </>}
-                    </ReplyForm> : <Box><Button variant="outlined" href={`/login?next=/issues/${id}`}>登录后回复</Button></Box>}
+                    </ReplyForm> : <Box><Button variant="outlined" href={`/#/login?next=/issues/${id}`}>登录后回复</Button></Box>}
                     </Stack>
                 </Stack>
                 <Paper component="aside" variant="outlined" sx={{ p: 2.5, position: { md: "sticky" }, top: 24 }}>

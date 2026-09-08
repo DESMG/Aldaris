@@ -199,7 +199,7 @@ export async function navigate(path: string) {
         if (!await confirmDraftNavigation() || window.location.href !== startingUrl || sessionGeneration !== startingSession) return false;
     }
     const index = (window.history.state?.aldarisIndex ?? 0) + 1;
-    window.history.pushState({ aldarisIndex: index }, "", path);
+    window.history.pushState({ aldarisIndex: index }, "", `/#${path}`);
     window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
     window.scrollTo(0, 0);
     return true;
