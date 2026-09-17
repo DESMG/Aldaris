@@ -90,8 +90,7 @@ cp build/cwebp.js build/cwebp.mjs
 
 - 每张图片创建独立模块实例，通过 FS 写入完整 JPG/PNG 数据，再调用 callMain，检查其返回码后读取 WebP 数据。
 - 默认测试参数是 -q 80 -m 4。无损模式添加 -lossless；需要保留完全透明像素的 RGB 时再添加 -exact。
-- 浏览器应通过 HTTP(S) 加载模块。大图编码同步执行，建议使用 Worker。当前产物已在 Node.js 验证，尚未完成浏览器实测。
 - CMYK JPEG 尚不支持：解码阶段请求 RGB 转换时报 Unsupported color conversion request。
 - 默认丢弃 EXIF 方向标记且不旋转像素。-metadata all 可以保留标记，但不保证所有读取端都会按标记显示。
 - 16 位 PNG 会降为 8 位；后续无损编码不会恢复原始精度。
-- WebP 单边尺寸上限是 16383；内存耗尽行为尚未测试。
+- WebP 单边尺寸上限是 16383。
