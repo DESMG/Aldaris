@@ -39,7 +39,7 @@ export type OperationDetails = {
     user_updated: { previousName: string; name: string; previousUsername: string; username: string; passwordChanged: false };
     user_deleted: { username: string; name: string };
     password_reset: { previousName: string; name: string; previousUsername: string; username: string; passwordChanged: true }
-        | { userId: number; self: true };
+    | { userId: number; self: true };
     issue_created: { resourceId: number };
     reply_created: { resourceId: number };
     reply_edited: { replyId: number; issueId: number };

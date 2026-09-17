@@ -81,13 +81,15 @@ export default function CreateIssueDialog({ origin, onClose }: { origin: DOMRect
     }
     return <Dialog open={open} onClose={close} fullWidth maxWidth="sm" aria-labelledby="create-issue-title"
         transitionDuration={reducedMotion ? 0 : { enter: 500, exit: 1000 }}
-        slotProps={{ paper: { ref: paper }, transition: {
-            style: { opacity: 1 },
-            onEnter: () => animate(true),
-            onEntered: () => animation.current?.cancel(),
-            onExit: () => animate(false),
-            onExited: () => { draft.clear(); onClose(); },
-        } }}>
+        slotProps={{
+            paper: { ref: paper }, transition: {
+                style: { opacity: 1 },
+                onEnter: () => animate(true),
+                onEntered: () => animation.current?.cancel(),
+                onExit: () => animate(false),
+                onExited: () => { draft.clear(); onClose(); },
+            }
+        }}>
         <Box component="form" onSubmit={async event => {
             event.preventDefault();
             if (!open || !title.trim() || saving || processing || submitting.current) return;

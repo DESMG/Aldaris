@@ -300,7 +300,7 @@ export async function issues(request: Request, env: Env, user: User) {
             const updateReply = env.DB.prepare(`UPDATE replies SET description = ?, mentions = ${mentionRecords}, version = version + 1
                 WHERE id = ? AND version = ? AND (SELECT COUNT(*) FROM images WHERE replyId = replies.id
                     AND state = 'active' AND key IN (SELECT value FROM json_each(?))) = ?`)
-                    .bind(description, candidates, reply.id, reply.version, ...uploadBindings);
+                .bind(description, candidates, reply.id, reply.version, ...uploadBindings);
             const operation = recordOperation(env.DB, user, "reply_edited", { replyId: reply.id, issueId: reply.issueId });
             commitAttempted = true;
             env.signal?.throwIfAborted();
@@ -366,12 +366,12 @@ export async function issues(request: Request, env: Env, user: User) {
                 FROM issue_assignees
                 WHERE issueId = issues.id))
             `)
-                .bind(
-                    user.id, JSON.stringify(assignees), new Date().toISOString(),
-                    assignmentMatch[1], issue.assignmentVersion,
-                    JSON.stringify(assignees), memberCount,
-                    JSON.stringify(assignees), JSON.stringify(assignees),
-                );
+            .bind(
+                user.id, JSON.stringify(assignees), new Date().toISOString(),
+                assignmentMatch[1], issue.assignmentVersion,
+                JSON.stringify(assignees), memberCount,
+                JSON.stringify(assignees), JSON.stringify(assignees),
+            );
         const removeAssignees = env.DB.prepare(`
             DELETE FROM issue_assignees WHERE issueId = ? AND EXISTS (
                 SELECT 1 FROM issues

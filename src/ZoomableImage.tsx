@@ -75,8 +75,10 @@ export default function ZoomableImage({ alt, thumbnailSx, renderImage }: {
                             if (before === 0) return;
                             setView(current => {
                                 const scale = Math.min(8, Math.max(1, current.scale * after / before));
-                                return { scale, x: current.x * scale / current.scale + dx / 2,
-                                    y: current.y * scale / current.scale + dy / 2 };
+                                return {
+                                    scale, x: current.x * scale / current.scale + dx / 2,
+                                    y: current.y * scale / current.scale + dy / 2
+                                };
                             });
                         } else {
                             setView(current => ({ ...current, x: current.x + dx, y: current.y + dy }));
@@ -86,9 +88,9 @@ export default function ZoomableImage({ alt, thumbnailSx, renderImage }: {
                     onPointerCancel={event => { dragged.current = true; pointers.current.delete(event.pointerId); }}
                     onLostPointerCapture={event => { pointers.current.delete(event.pointerId); }}
                     sx={{
-                    display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 0,
-                    cursor: "grab", userSelect: "none", "&:active": { cursor: "grabbing" },
-                }}>
+                        display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 0,
+                        cursor: "grab", userSelect: "none", "&:active": { cursor: "grabbing" },
+                    }}>
                     {renderImage({
                         display: "block", minWidth: 0, maxWidth: "100%", maxHeight: "calc(100dvh - 88px)", objectFit: "contain",
                         transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,

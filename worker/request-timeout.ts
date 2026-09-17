@@ -14,12 +14,12 @@ export async function withRequestTimeout(handle: (signal: AbortSignal) => Promis
         return await Promise.race([timeout, (async () => {
             const response = await handle(controller.signal);
             if (controller.signal.aborted) {
-                void response.body?.cancel().catch(() => {});
+                void response.body?.cancel().catch(() => { });
                 throw error;
             }
             if (!response.body) return response;
             const reader = response.body.getReader();
-            const cancel = () => { void reader.cancel().catch(() => {}); };
+            const cancel = () => { void reader.cancel().catch(() => { }); };
             controller.signal.addEventListener("abort", cancel, { once: true });
             const chunks: Uint8Array[] = [];
             try {

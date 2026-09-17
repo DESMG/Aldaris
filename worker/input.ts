@@ -22,7 +22,7 @@ export async function readForm(request: Request, maxBytes = FORM_BODY_MAX_BYTES)
     if (!request.body) throw new HttpError(400, "读取表单：请求体不能为空。");
 
     const reader = request.body.getReader();
-    const cancel = () => { void reader.cancel().catch(() => {}); };
+    const cancel = () => { void reader.cancel().catch(() => { }); };
     request.signal.addEventListener("abort", cancel, { once: true });
     const bytes = new Uint8Array(maxBytes);
     let size = 0;
@@ -34,7 +34,7 @@ export async function readForm(request: Request, maxBytes = FORM_BODY_MAX_BYTES)
             if (done) break;
             if (value.byteLength > maxBytes - size) {
                 // Cancellation is best effort; its failure must not replace the size error.
-                void reader.cancel().catch(() => {});
+                void reader.cancel().catch(() => { });
                 throw new HttpError(413, "读取表单：请求体超过大小限制。");
             }
             bytes.set(value, size);

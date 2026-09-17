@@ -20,11 +20,13 @@ export class Images extends WorkerEntrypoint<Env> {
                 signal.throwIfAborted();
                 const key = new URL(request.url).pathname.slice(1);
                 const image = await this.env.IMAGES.get(key);
-                if (!image) return new Response(null, { status: 404, headers: {
-                    "Cache-Control": "no-store",
-                    "CDN-Cache-Control": "no-store",
-                    "Cloudflare-CDN-Cache-Control": "no-store",
-                } });
+                if (!image) return new Response(null, {
+                    status: 404, headers: {
+                        "Cache-Control": "no-store",
+                        "CDN-Cache-Control": "no-store",
+                        "Cloudflare-CDN-Cache-Control": "no-store",
+                    }
+                });
                 const headers = new Headers();
                 image.writeHttpMetadata(headers);
                 headers.set("ETag", image.httpEtag);
@@ -35,11 +37,13 @@ export class Images extends WorkerEntrypoint<Env> {
             });
         } catch (error) {
             if (!(error instanceof HttpError) || error.status !== 504) throw error;
-            return Response.json({ error: apiError(error.message) }, { status: 504, headers: {
-                "Cache-Control": "no-store",
-                "CDN-Cache-Control": "no-store",
-                "Cloudflare-CDN-Cache-Control": "no-store",
-            } });
+            return Response.json({ error: apiError(error.message) }, {
+                status: 504, headers: {
+                    "Cache-Control": "no-store",
+                    "CDN-Cache-Control": "no-store",
+                    "Cloudflare-CDN-Cache-Control": "no-store",
+                }
+            });
         }
     }
 }

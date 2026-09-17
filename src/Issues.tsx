@@ -127,73 +127,73 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
             )}
             <Box sx={{ height: 4 }}>{loading && <LinearProgress aria-label="正在加载工单" />}</Box>
             <Stack ref={results} spacing={3} inert={status !== loadedStatus || page !== loadedPage}>
-            <Typography variant="body2" color="text.secondary">
-                共 {counts[loadedStatus]} 个工单
-            </Typography>
+                <Typography variant="body2" color="text.secondary">
+                    共 {counts[loadedStatus]} 个工单
+                </Typography>
 
-            {(!loading || status !== loadedStatus || page !== loadedPage) && !error && issues.length === 0 && (
-                <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
-                    <Typography>
-                        {`暂无${loadedStatus === "Open" ? "打开" : "已关闭"}的工单。`}
-                    </Typography>
-                </Paper>
-            )}
-
-            <Stack spacing={2}>
-                {issues.map((issue) => (
-                    <Paper component="a" href={`/#/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
-                        <Stack spacing={2}>
-                            <Typography
-                                title={`#${issue.id} ${issue.title}`}
-                                sx={{ color: "text.primary", fontSize: "1rem", fontWeight: 650, overflowWrap: "anywhere" }}
-                            >
-                                <Box component="span" sx={{ color: "text.secondary", fontWeight: 400, mr: 1.5 }}>#{issue.id}</Box>{issue.title}
-                            </Typography>
-                            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                                <Chip size="small" label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
-                                <Chip size="small" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} variant="outlined" />
-                                <Chip size="small" label={`创建人：${issue.authorName ?? "匿名"}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
-                                {assignmentRoles.flatMap(role => issue.assignees.filter(member => member.role === role).map(member => (
-                                    <Chip key={`${role}-${member.id}`} size="small" label={<>
-                                        {`${assignmentLabels[role]}：${member.name}`}
-                                        {member.id === user?.id && <Box component="span" aria-hidden="true" ref={(node: HTMLSpanElement | null) => {
-                                            if (!node) return;
-                                            const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-                                            const animation = node.animate([
-                                                { transform: "translateX(-120%)", offset: 0 },
-                                                { transform: "translateX(120%)", offset: 1 },
-                                            ], { duration: 1500, iterations: Infinity, easing: "ease-in-out" });
-                                            const updateMotion = () => {
-                                                if (reducedMotion.matches) animation.cancel();
-                                                else animation.play();
-                                            };
-                                            updateMotion();
-                                            reducedMotion.addEventListener("change", updateMotion);
-                                            return () => { animation.cancel(); reducedMotion.removeEventListener("change", updateMotion); };
-                                        }} sx={{
-                                            position: "absolute", inset: 0, pointerEvents: "none", transform: "translateX(-120%)",
-                                            background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.9) 50%, transparent 65%)",
-                                            ".dark &": {
-                                                background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.5) 50%, transparent 65%)",
-                                            },
-                                        }} />}
-                                    </>}
-                                        title={member.id === user?.id ? "你是此工单的关系人" : undefined}
-                                        sx={{
-                                            height: "auto", minHeight: 24,
-                                            "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 },
-                                            ...(member.id === user?.id && {
-                                                position: "relative", overflow: "hidden",
-                                            }),
-                                        }} />
-                                )))}
-                                <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: "auto" }, width: { xs: "100%", sm: "auto" } }}>{new Date(issue.createdAt).toLocaleString("sv-SE")}</Typography>
-                            </Stack>
-                        </Stack>
+                {(!loading || status !== loadedStatus || page !== loadedPage) && !error && issues.length === 0 && (
+                    <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
+                        <Typography>
+                            {`暂无${loadedStatus === "Open" ? "打开" : "已关闭"}的工单。`}
+                        </Typography>
                     </Paper>
-                ))}
-            </Stack>
-            {counts[loadedStatus] > 0 && <Pagination sx={{ "& .MuiPagination-ul": { justifyContent: "flex-end" } }} count={pages} page={loadedPage} disabled={loading} onChange={(_, value) => setView(current => ({ ...current, page: value }))} />}
+                )}
+
+                <Stack spacing={2}>
+                    {issues.map((issue) => (
+                        <Paper component="a" href={`/#/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
+                            <Stack spacing={2}>
+                                <Typography
+                                    title={`#${issue.id} ${issue.title}`}
+                                    sx={{ color: "text.primary", fontSize: "1rem", fontWeight: 650, overflowWrap: "anywhere" }}
+                                >
+                                    <Box component="span" sx={{ color: "text.secondary", fontWeight: 400, mr: 1.5 }}>#{issue.id}</Box>{issue.title}
+                                </Typography>
+                                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                                    <Chip size="small" label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
+                                    <Chip size="small" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} variant="outlined" />
+                                    <Chip size="small" label={`创建人：${issue.authorName ?? "匿名"}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
+                                    {assignmentRoles.flatMap(role => issue.assignees.filter(member => member.role === role).map(member => (
+                                        <Chip key={`${role}-${member.id}`} size="small" label={<>
+                                            {`${assignmentLabels[role]}：${member.name}`}
+                                            {member.id === user?.id && <Box component="span" aria-hidden="true" ref={(node: HTMLSpanElement | null) => {
+                                                if (!node) return;
+                                                const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+                                                const animation = node.animate([
+                                                    { transform: "translateX(-120%)", offset: 0 },
+                                                    { transform: "translateX(120%)", offset: 1 },
+                                                ], { duration: 1500, iterations: Infinity, easing: "ease-in-out" });
+                                                const updateMotion = () => {
+                                                    if (reducedMotion.matches) animation.cancel();
+                                                    else animation.play();
+                                                };
+                                                updateMotion();
+                                                reducedMotion.addEventListener("change", updateMotion);
+                                                return () => { animation.cancel(); reducedMotion.removeEventListener("change", updateMotion); };
+                                            }} sx={{
+                                                position: "absolute", inset: 0, pointerEvents: "none", transform: "translateX(-120%)",
+                                                background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.9) 50%, transparent 65%)",
+                                                ".dark &": {
+                                                    background: "linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, 0.5) 50%, transparent 65%)",
+                                                },
+                                            }} />}
+                                        </>}
+                                            title={member.id === user?.id ? "你是此工单的关系人" : undefined}
+                                            sx={{
+                                                height: "auto", minHeight: 24,
+                                                "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 },
+                                                ...(member.id === user?.id && {
+                                                    position: "relative", overflow: "hidden",
+                                                }),
+                                            }} />
+                                    )))}
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: "auto" }, width: { xs: "100%", sm: "auto" } }}>{new Date(issue.createdAt).toLocaleString("sv-SE")}</Typography>
+                                </Stack>
+                            </Stack>
+                        </Paper>
+                    ))}
+                </Stack>
+                {counts[loadedStatus] > 0 && <Pagination sx={{ "& .MuiPagination-ul": { justifyContent: "flex-end" } }} count={pages} page={loadedPage} disabled={loading} onChange={(_, value) => setView(current => ({ ...current, page: value }))} />}
             </Stack>
 
             {creating && user && <CreateIssueDialog origin={creating} onClose={() => setCreating(null)} />}
