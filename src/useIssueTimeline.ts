@@ -50,9 +50,7 @@ export default function useIssueTimeline(id: number, target: string | null, refr
             const next = await cachedJson<TimelineData>(`/api/issues/${id}/timeline?before=${encodeURIComponent(data.beforeCursor)}`, { refresh: true });
             if (current !== generation.current) return;
             setData(previous => {
-                const known = new Set(previous.entries.map(entry => `${entry.kind}:${entry.id}`));
-                const added = next.entries.filter(entry => !known.has(`${entry.kind}:${entry.id}`));
-                return { ...previous, entries: [...previous.entries.slice(0, 10), ...added, ...previous.entries.slice(10)], total: next.total, hiddenCount: next.hiddenCount, beforeCursor: next.beforeCursor };
+                return { ...previous, entries: [...previous.entries.slice(0, 10), ...next.entries, ...previous.entries.slice(10)], total: next.total, hiddenCount: next.hiddenCount, beforeCursor: next.beforeCursor };
             });
             requestAnimationFrame(() => {
                 if (top === undefined || !anchor?.isConnected) return;

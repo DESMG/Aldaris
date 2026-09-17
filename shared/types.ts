@@ -34,10 +34,22 @@ export type TimelineEntry = (Reply & { kind: "reply" })
     | (Event & { kind: "reply_edited" | "reply_deleted"; details: { replyId: number } })
     | (Event & { kind: "assignment"; details: { before: AssignmentSnapshot[]; after: AssignmentSnapshot[] } });
 export type LoginSession = { token: string; user: User; expiresAt: number };
-export type OperationAction = "user_created" | "user_updated" | "user_deleted" | "password_reset"
-    | "issue_created" | "reply_created" | "reply_edited" | "reply_deleted" | "issue_status" | "issue_priority" | "issue_assignees";
-export type OperationEvent = {
-    id: number; actorId: number; actorName: string; targetId: number | null;
-    action: OperationAction;
-    details: Record<string, string | number | boolean>; createdAt: string;
+export type OperationDetails = {
+    user_created: { username: string; name: string; role: User["role"] };
+    user_updated: { previousName: string; name: string; previousUsername: string; username: string; passwordChanged: false };
+    user_deleted: { username: string; name: string };
+    password_reset: { previousName: string; name: string; previousUsername: string; username: string; passwordChanged: true }
+        | { userId: number; self: true };
+    issue_created: { resourceId: number };
+    reply_created: { resourceId: number };
+    reply_edited: { replyId: number; issueId: number };
+    reply_deleted: { replyId: number; issueId: number };
+    issue_status: { issueId: number; value: Issue["status"] };
+    issue_priority: { issueId: number; value: Issue["priority"] };
+    issue_assignees: { issueId: number };
 };
+export type OperationAction = keyof OperationDetails;
+type OperationEventBase = { id: number; actorId: number; actorName: string; targetId: number | null; createdAt: string };
+export type OperationEvent = {
+    [Action in OperationAction]: OperationEventBase & { action: Action; details: OperationDetails[Action] }
+}[OperationAction];

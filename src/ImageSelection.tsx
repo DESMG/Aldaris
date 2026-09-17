@@ -44,7 +44,7 @@ export default function ImageSelection({ images, onChange, disabled, retainedCou
     onChange: (images: File[]) => void;
     disabled: boolean;
     retainedCount?: number;
-    onProcessingChange?: (processing: boolean) => void;
+    onProcessingChange: (processing: boolean) => void;
     pastedFiles: File[] | null;
 }) {
     const [processing, setProcessing] = useState(false);
@@ -64,7 +64,7 @@ export default function ImageSelection({ images, onChange, disabled, retainedCou
         }
         active.current = true;
         setProcessing(true);
-        onProcessingChange?.(true);
+        onProcessingChange(true);
         try {
             const prepared: File[] = [];
             for (const file of files) prepared.push(await prepareImage(file));
@@ -73,14 +73,14 @@ export default function ImageSelection({ images, onChange, disabled, retainedCou
             if (mounted.current) setError(`${String(error)} 本次选择未添加。`);
         } finally {
             active.current = false;
-            if (mounted.current) { setProcessing(false); onProcessingChange?.(false); }
+            if (mounted.current) { setProcessing(false); onProcessingChange(false); }
         }
     }
     useEffect(() => { if (pastedFiles) void add(pastedFiles); }, [pastedFiles]);
     return <Stack spacing={1}>
         <Box><Button component="label" disabled={disabled || processing}>选择图片
             <input type="file" accept="image/png,image/jpeg" multiple hidden disabled={disabled || processing} onChange={event => {
-                const files = Array.from(event.target.files ?? []);
+                const files = Array.from(event.target.files!);
                 event.target.value = "";
                 void add(files);
             }} />

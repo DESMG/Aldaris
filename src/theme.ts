@@ -1,4 +1,5 @@
 import { createTheme } from "@mui/material/styles";
+import { zhCN } from "@mui/material/locale";
 
 const theme = createTheme({
     cssVariables: {
@@ -169,6 +170,6 @@ const theme = createTheme({
         MuiBadge: { styleOverrides: { colorPrimary: { backgroundColor: "var(--accent-bg)", color: "#ffffff" }, colorError: { backgroundColor: "var(--danger-bg)", color: "#ffffff" } } },
         MuiLinearProgress: { styleOverrides: { root: { backgroundColor: "var(--control-bg)" }, bar: { backgroundColor: "var(--accent-bg)" } } },
     },
-});
+}, zhCN);
 
 export default theme;

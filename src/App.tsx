@@ -270,7 +270,7 @@ export default function App() {
                                     <ThemeToggle />
                                     {user ? <>
                                         <IconButton id="account-button" aria-label="账户菜单" title={user.name} aria-controls={accountAnchor ? "account-menu" : undefined} aria-haspopup="true" aria-expanded={accountAnchor ? "true" : undefined} onClick={event => setAccountAnchor(event.currentTarget)}>
-                                            <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" }}>{Array.from(user.name || user.username)[0]?.toUpperCase()}</Avatar>
+                                            <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: "primary.main", color: "primary.contrastText", borderColor: "primary.main" }}>{Array.from(user.name)[0].toUpperCase()}</Avatar>
                                         </IconButton>
                                         <Menu id="account-menu" anchorEl={accountAnchor} open={Boolean(accountAnchor)} onClose={() => setAccountAnchor(null)} anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }} slotProps={{ list: { "aria-labelledby": "account-button" }, paper: { sx: { minWidth: 200, mt: 1 } } }}>
                                             <Box sx={{ px: 2, py: 1 }}>
@@ -334,7 +334,7 @@ export default function App() {
                         </Stack>
                     </Stack>
                 </Container>
-                <Dialog open={pausedAccount !== null} className="reauthentication-dialog" fullWidth maxWidth="sm" sx={{ zIndex: theme.zIndex.modal + 10 }}>
+                <Dialog open={pausedAccount !== null} className="reauthentication-dialog" fullWidth maxWidth="sm" sx={{ zIndex: theme => theme.zIndex.modal + 10 }}>
                     <DialogTitle>重新登录以恢复草稿</DialogTitle>
                     <DialogContent>
                         <Typography sx={{ mb: 2, overflowWrap: "anywhere" }}>登录已失效或账户已切换，@{pausedAccount?.username} 的未提交内容仍保留在当前页面。请重新登录原账户；刷新后可恢复已保存的文字，图片和密码需重新填写，关闭标签页后不承诺恢复。</Typography>

@@ -7,7 +7,7 @@ import type { Mention } from "../shared/types";
 import { textLinks } from "../shared/links";
 import { forgetImage } from "./api";
 
-export default function Content({ description, images, clearedImages = [], mentions = [] }: { description: string; images: string[]; clearedImages?: string[]; mentions?: Mention[] }) {
+export default function Content({ description, images, clearedImages, mentions = [] }: { description: string; images: string[]; clearedImages: string[]; mentions?: Mention[] }) {
     useEffect(() => {
         for (const key of clearedImages) forgetImage(`/api/images/${key}`);
     }, [clearedImages]);

@@ -112,7 +112,7 @@ export function getLoginSession(): LoginSession | null {
             || !["user", "admin"].includes(session.user.role) || !Number.isSafeInteger(session.expiresAt)) throw new Error();
     } catch {
         setLoginSession(null);
-        throw new Error("保存的登录状态损坏，已清除，请重新登录。");
+        return null;
     }
     if (session.expiresAt <= Date.now()) { setLoginSession(null); return null; }
     return session;

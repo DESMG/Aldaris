@@ -15,7 +15,7 @@ export default function Description({ label, value, onChange, images, onImagesCh
     onImagesChange: (images: File[]) => void;
     disabled: boolean;
     retainedCount?: number;
-    onProcessingChange?: (processing: boolean) => void;
+    onProcessingChange: (processing: boolean) => void;
 }) {
     const input = useRef<HTMLTextAreaElement>(null);
     const popup = useRef<HTMLDivElement>(null);
@@ -144,13 +144,13 @@ export default function Description({ label, value, onChange, images, onImagesCh
             label={label} multiline minRows={4} fullWidth disabled={disabled}
             inputRef={input} helperText="输入 @用户名 搜索并提及用户。"
             onFocus={() => setFocused(true)}
-            onSelect={() => {
-                const next = input.current?.selectionStart ?? 0;
+            onSelect={(event) => {
+                const next = (event.target as HTMLTextAreaElement).selectionStart;
                 if (next !== cursor) setDismissed(false);
                 setCursor(next);
             }}
             slotProps={{ htmlInput: { maxLength: DESCRIPTION_MAX_LENGTH } }}
-            value={value} onChange={(event) => { setDismissed(false); onChange(event.target.value); setCursor(event.target.selectionStart ?? 0); }}
+            value={value} onChange={(event) => { setDismissed(false); onChange(event.target.value); setCursor(event.target.selectionStart!); }}
             onPaste={(event) => {
                 const pasted = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
                 if (pasted.length > 0) { event.preventDefault(); setPastedFiles(pasted); }

@@ -43,15 +43,15 @@ export default function AssigneeEditor({ issue, onSaved, onCancel, saving, onSav
             <Button disabled={saving} onClick={() => { setVersion(latest.assignmentVersion); setConflict(false); setLatest(null); setError(""); }}>保留我的选择并使用此版本</Button>
         </Stack></Paper>}
         <Typography variant="body2">已指派 {selectedIds.length}/{ASSIGNEE_MAX_COUNT} 人，同一人兼任产品和开发只计一次。</Typography>
-        {selectedIds.length > ASSIGNEE_MAX_COUNT && <Alert severity="warning">已有指派超过上限，请先移除负责人，减至 {ASSIGNEE_MAX_COUNT} 人以内再保存。</Alert>}
         {assignmentRoles.map(role => <UserPicker key={role} label={assignmentLabels[role]} value={assignees.filter(member => member.role === role)} accountRole={assignmentAccountRoles[role]} selectedIds={selectedIds}
             onChange={members => {
                 const next = [...assignees.filter(member => member.role !== role), ...members.map(member => ({ ...member, role }))];
                 const nextCount = new Set(next.map(member => member.id)).size;
-                if (nextCount > ASSIGNEE_MAX_COUNT && nextCount > selectedIds.length) {
-                    setError(`每个工单最多指派 ${ASSIGNEE_MAX_COUNT} 人，请先移除其他负责人。`);
+                if (nextCount > ASSIGNEE_MAX_COUNT) {
+                    setError(`每个工单最多指派 ${ASSIGNEE_MAX_COUNT} 人。`);
                     return;
                 }
+                setError("");
                 setAssignees(next);
             }} disabled={saving} />)}
         <Button variant="contained" disabled={saving || conflict || selectedIds.length > ASSIGNEE_MAX_COUNT} onClick={async () => {

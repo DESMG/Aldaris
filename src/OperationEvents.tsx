@@ -9,6 +9,37 @@ const labels: Record<OperationEvent["action"], string> = {
     issue_status: "修改工单状态", issue_priority: "修改优先级", issue_assignees: "修改负责人",
 };
 
+function describe(event: OperationEvent) {
+    switch (event.action) {
+        case "user_created": return [
+            `账户：${event.details.name} (@${event.details.username})`,
+            `角色：${event.details.role === "admin" ? "管理员" : "用户"}`,
+        ];
+        case "user_updated": return [
+            ...(event.details.previousName === event.details.name ? [] : [`昵称：${event.details.previousName} → ${event.details.name}`]),
+            ...(event.details.previousUsername === event.details.username ? [] : [`用户名：@${event.details.previousUsername} → @${event.details.username}`]),
+        ];
+        case "user_deleted": return [`账户：${event.details.name} (@${event.details.username})`];
+        case "password_reset": return "self" in event.details
+            ? [`账户：用户 #${event.details.userId}`, "修改方式：本人修改"]
+            : [
+                `账户：${event.details.name} (@${event.details.username})`,
+                "修改方式：管理员重置",
+                ...(event.details.previousName === event.details.name ? [] : [`昵称：${event.details.previousName} → ${event.details.name}`]),
+                ...(event.details.previousUsername === event.details.username ? [] : [`用户名：@${event.details.previousUsername} → @${event.details.username}`]),
+            ];
+        case "issue_created": return [`工单：#${event.details.resourceId}`];
+        case "reply_created": return [`评论：#${event.details.resourceId}`];
+        case "reply_edited": return [`工单：#${event.details.issueId}`, `评论：#${event.details.replyId}`];
+        case "reply_deleted": return [`工单：#${event.details.issueId}`, `评论：#${event.details.replyId}`];
+        case "issue_status": return [`工单：#${event.details.issueId}`, `状态：${event.details.value === "Open" ? "打开" : "已关闭"}`];
+        case "issue_priority": return [`工单：#${event.details.issueId}`, `优先级：${{ Low: "低", Medium: "中", High: "高" }[event.details.value]}`];
+        case "issue_assignees": return [`工单：#${event.details.issueId}`];
+    }
+    event satisfies never;
+    throw new Error("操作记录包含未支持的操作类型。");
+}
+
 export default function OperationEvents({ user }: { user: User }) {
     const [events, setEvents] = useState<OperationEvent[]>([]);
     const [next, setNext] = useState<number | null>(null);
@@ -43,7 +74,7 @@ export default function OperationEvents({ user }: { user: User }) {
             <Typography>{event.actorName} (用户 #{event.actorId}) · {labels[event.action]}</Typography>
             {event.targetId !== null && <Typography variant="body2">目标用户 #{event.targetId}</Typography>}
             <Typography variant="caption" color="text.secondary">{new Date(event.createdAt).toLocaleString("sv-SE")}</Typography>
-            {Object.entries(event.details).map(([key, value]) => <Typography key={key} variant="body2">{key}: {String(value)}</Typography>)}
+            {describe(event).map(line => <Typography key={line} variant="body2">{line}</Typography>)}
         </Paper>)}
         {next !== null && <Button disabled={loading} onClick={() => setBefore(next)}>加载更早记录</Button>}
     </Stack>;
