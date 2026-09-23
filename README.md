@@ -4,6 +4,8 @@ Aldaris 是一个 Issue Tracker System.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/DESMG/Aldaris)
 
+在 Cloudflare 部署配置中，请确认构建命令（Build command）为 `npm run build`，部署命令（Deploy command）为 `npm run deploy`，以便在部署成功后执行远程 D1 数据库迁移；若部署命令显示为 `npx wrangler deploy`，请手动修改。
+
 ## 初始化
 
 这条SQL可以初始化一个密码为 `123456` 的管理员 `admin`，请务必修改密码。

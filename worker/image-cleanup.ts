@@ -7,10 +7,9 @@ export async function deletePendingImages(env: Env) {
     const keys = pending.results.map(row => row.key);
     env.signal?.throwIfAborted();
     await env.IMAGES.delete(keys);
-    // Keep references and positions for cleared-image placeholders.
     env.signal?.throwIfAborted();
     await env.DB.batch([
-        env.DB.prepare("UPDATE images SET state = 'deleted' WHERE state = 'deleting' AND key IN (SELECT value FROM json_each(?))").bind(JSON.stringify(keys)),
+        env.DB.prepare("DELETE FROM images WHERE state = 'deleting' AND key IN (SELECT value FROM json_each(?))").bind(JSON.stringify(keys)),
         env.DB.prepare("UPDATE image_capacity SET requestedBytes = 0 WHERE id = 1 AND 10000000000 - byteSize >= requestedBytes"),
     ]);
 }
@@ -47,25 +46,23 @@ async function queueOldImages(env: Env) {
 }
 
 export async function reconcileImages(env: Env) {
-    const expired = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const now = Date.now();
+    const expired = new Date(now - 60 * 60 * 1000).toISOString();
+    const retained = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString();
     env.signal?.throwIfAborted();
     await env.DB.prepare(`UPDATE images SET state = 'deleting' WHERE key IN (
-        SELECT key FROM images WHERE state IN ('reserved', 'uploaded') AND createdAt < ?
-        ORDER BY createdAt, key LIMIT 20
-    )`).bind(expired).run();
-    env.signal?.throwIfAborted();
-    const uncertain = await env.DB.prepare(`SELECT key FROM images WHERE state = 'uploading'
-        AND createdAt < ? ORDER BY checkedAt, key LIMIT 10`).bind(expired).all<{ key: string }>();
-    for (const { key } of uncertain.results) {
-        env.signal?.throwIfAborted();
-        await env.DB.prepare("UPDATE images SET checkedAt = ? WHERE key = ? AND state = 'uploading'").bind(new Date().toISOString(), key).run();
-        // Absence cannot prove an interrupted PUT will never finish.
-        env.signal?.throwIfAborted();
-        if (await env.IMAGES.head(key)) {
-            env.signal?.throwIfAborted();
-            await env.DB.prepare("UPDATE images SET state = 'deleting' WHERE key = ? AND state = 'uploading'").bind(key).run();
-        } else console.error("图片上传结果尚未确认，继续保留容量", key);
-    }
+        SELECT key FROM (
+            SELECT key, createdAt FROM (
+                SELECT key, createdAt FROM images WHERE state IN ('reserved', 'uploading', 'uploaded') AND createdAt < ?
+                ORDER BY createdAt, key LIMIT 20
+            )
+            UNION ALL
+            SELECT key, createdAt FROM (
+                SELECT key, createdAt FROM images WHERE state = 'active' AND createdAt <= ?
+                ORDER BY createdAt, key LIMIT 20
+            )
+        ) ORDER BY createdAt, key LIMIT 20
+    )`).bind(expired, retained).run();
     env.signal?.throwIfAborted();
     await queueOldImages(env);
     env.signal?.throwIfAborted();

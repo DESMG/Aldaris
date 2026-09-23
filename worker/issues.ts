@@ -74,9 +74,11 @@ export async function issues(request: Request, env: Env, user: User) {
         const issue = await env.DB.prepare(`
                 SELECT issues.id, issues.title, issues.description,
                     ${mentionDetails("issues.mentions")} AS mentions,
-                    (SELECT json_group_array(key) FROM (SELECT key FROM images
-                        WHERE images.issueId = issues.id ORDER BY position)) AS images,
-                    (SELECT json_group_array(key) FROM images WHERE images.issueId = issues.id AND state IN ('deleting', 'deleted')) AS clearedImages,
+                    issues.images,
+                    (SELECT json_group_array(value) FROM json_each(issues.images) WHERE NOT EXISTS (
+                        SELECT 1 FROM images WHERE images.key = json_each.value AND state = 'active'
+                            AND createdAt > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')
+                    )) AS clearedImages,
                     issues.priority, issues.status, issues.stateReason, issues.createdAt,
                     issues.authorId, issues.assignmentVersion, issues.version,
                     users.name AS authorName,
@@ -109,9 +111,11 @@ export async function issues(request: Request, env: Env, user: User) {
             SELECT replies.id, replies.version, replies.authorId, users.name AS authorName,
                 replies.description, replies.createdAt,
                 ${mentionDetails("replies.mentions")} AS mentions,
-                (SELECT json_group_array(key) FROM (SELECT key FROM images
-                    WHERE images.replyId = replies.id ORDER BY position)) AS images,
-                (SELECT json_group_array(key) FROM images WHERE images.replyId = replies.id AND state IN ('deleting', 'deleted')) AS clearedImages
+                replies.images,
+                (SELECT json_group_array(value) FROM json_each(replies.images) WHERE NOT EXISTS (
+                    SELECT 1 FROM images WHERE images.key = json_each.value AND state = 'active'
+                        AND createdAt > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')
+                )) AS clearedImages
             FROM replies JOIN users ON users.id = replies.authorId WHERE replies.id = ?
         `).bind(singleReply[1]).first<ReplyRow>();
         if (!reply) throw new HttpError(404, "该评论已被删除。");
@@ -171,12 +175,12 @@ export async function issues(request: Request, env: Env, user: User) {
             const createdAt = new Date().toISOString();
             const candidates = JSON.stringify(mentionCandidates(description));
             const statement = replyMatch
-                ? env.DB.prepare(`INSERT INTO replies (issueId, authorId, description, mentions, creationToken, createdAt)
-                    SELECT ?, ?, ?, ${mentionRecords}, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?) AND ${availableUploads}`)
-                    .bind(replyMatch[1], user.id, description, candidates, creationToken, createdAt, user.id, requestKey, JSON.stringify(keys), keys.length)
-                : env.DB.prepare(`INSERT INTO issues (title, description, mentions, priority, creationToken, createdAt, authorId)
-                    SELECT ?, ?, ${mentionRecords}, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?) AND ${availableUploads}`)
-                    .bind(title, description, candidates, "Low", creationToken, createdAt, user.id, user.id, requestKey, JSON.stringify(keys), keys.length);
+                ? env.DB.prepare(`INSERT INTO replies (issueId, authorId, description, mentions, images, creationToken, createdAt)
+                    SELECT ?, ?, ?, ${mentionRecords}, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?) AND ${availableUploads}`)
+                    .bind(replyMatch[1], user.id, description, candidates, JSON.stringify(keys), creationToken, createdAt, user.id, requestKey, JSON.stringify(keys), keys.length)
+                : env.DB.prepare(`INSERT INTO issues (title, description, mentions, images, priority, creationToken, createdAt, authorId)
+                    SELECT ?, ?, ${mentionRecords}, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM mutation_requests WHERE userId = ? AND requestKey = ?) AND ${availableUploads}`)
+                    .bind(title, description, candidates, JSON.stringify(keys), "Low", creationToken, createdAt, user.id, user.id, requestKey, JSON.stringify(keys), keys.length);
             const remember = env.DB.prepare(`
                 INSERT OR IGNORE INTO mutation_requests (userId, requestKey, route, fingerprint, resourceId, createdAt)
                 SELECT ?, ?, ?, ?, id, ? FROM ${replyMatch ? "replies" : "issues"} WHERE creationToken = ?
@@ -189,10 +193,10 @@ export async function issues(request: Request, env: Env, user: User) {
             const table = replyMatch ? "replies" : "issues";
             const attachImages = env.DB.prepare(`UPDATE images SET
                 ${replyMatch ? "replyId" : "issueId"} = (SELECT id FROM ${table} WHERE creationToken = ?),
-                position = (SELECT key FROM json_each(?) WHERE value = images.key), state = 'active'
+                state = 'active'
                 WHERE state = 'uploaded' AND key IN (SELECT value FROM json_each(?))
                     AND EXISTS (SELECT 1 FROM ${table} WHERE creationToken = ?)`)
-                .bind(creationToken, JSON.stringify(keys), JSON.stringify(keys), creationToken);
+                .bind(creationToken, JSON.stringify(keys), creationToken);
             commitAttempted = true;
             env.signal?.throwIfAborted();
             const [created] = await env.DB.batch([statement, remember, operation, attachImages]);
@@ -218,9 +222,7 @@ export async function issues(request: Request, env: Env, user: User) {
     if (commentMatch && ["PATCH", "DELETE"].includes(request.method)) {
         env.signal?.throwIfAborted();
         const reply = await env.DB.prepare(`
-            SELECT id, issueId, authorId, description, mentions, version, createdAt,
-                (SELECT json_group_array(key) FROM (SELECT key FROM images
-                    WHERE replyId = replies.id ORDER BY position)) AS images
+            SELECT id, issueId, authorId, description, mentions, images, version, createdAt
             FROM replies WHERE id = ?
         `).bind(commentMatch[1]).first<ReplyRow>();
         if (!reply) return Response.json({ error: "未找到该评论。" }, { status: 404 });
@@ -236,7 +238,7 @@ export async function issues(request: Request, env: Env, user: User) {
                 FROM replies WHERE id = ? AND version = ?
             `).bind(user.id, new Date().toISOString(), reply.id, reply.version);
             const removeImages = env.DB.prepare(`
-                UPDATE images SET replyId = NULL, position = NULL, state = CASE WHEN state = 'deleted' THEN state ELSE 'deleting' END
+                UPDATE images SET replyId = NULL, state = 'deleting'
                 WHERE replyId = ? AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?)
             `).bind(reply.id, reply.id, reply.version);
             const remove = env.DB.prepare("DELETE FROM replies WHERE id = ? AND version = ?").bind(reply.id, reply.version);
@@ -278,34 +280,24 @@ export async function issues(request: Request, env: Env, user: User) {
                 AND version = ? AND ${availableUploads}
             `).bind(user.id, new Date().toISOString(), reply.id, reply.version, ...uploadBindings);
             const queueRemovedImages = env.DB.prepare(`
-                UPDATE images SET replyId = NULL, position = NULL, state = CASE WHEN state = 'deleted' THEN state ELSE 'deleting' END
+                UPDATE images SET replyId = NULL, state = 'deleting'
                 WHERE key IN (SELECT value FROM json_each(?)) AND replyId = ?
                     AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
             `).bind(JSON.stringify(removed), reply.id, reply.id, reply.version, ...uploadBindings);
-            const moveRetained = env.DB.prepare(`
-                UPDATE images SET position = position + 10
-                WHERE replyId = ? AND key IN (SELECT value FROM json_each(?))
-                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
-            `).bind(reply.id, JSON.stringify(retained), reply.id, reply.version, ...uploadBindings);
-            const attachRetained = env.DB.prepare(`
-                UPDATE images SET position = (SELECT key FROM json_each(?) WHERE value = images.key)
-                WHERE replyId = ? AND key IN (SELECT value FROM json_each(?))
-                    AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
-            `).bind(JSON.stringify(retained), reply.id, JSON.stringify(retained), reply.id, reply.version, ...uploadBindings);
             const attachUploaded = env.DB.prepare(`
-                UPDATE images SET replyId = ?, position = ? + (SELECT key FROM json_each(?) WHERE value = images.key), state = 'active'
+                UPDATE images SET replyId = ?, state = 'active'
                 WHERE state = 'uploaded' AND key IN (SELECT value FROM json_each(?))
                     AND EXISTS (SELECT 1 FROM replies WHERE id = ? AND version = ?) AND ${availableUploads}
-            `).bind(reply.id, retained.length, JSON.stringify(uploaded), JSON.stringify(uploaded), reply.id, reply.version, ...uploadBindings);
-            const updateReply = env.DB.prepare(`UPDATE replies SET description = ?, mentions = ${mentionRecords}, version = version + 1
+            `).bind(reply.id, JSON.stringify(uploaded), reply.id, reply.version, ...uploadBindings);
+            const updateReply = env.DB.prepare(`UPDATE replies SET description = ?, mentions = ${mentionRecords}, images = ?, version = version + 1
                 WHERE id = ? AND version = ? AND (SELECT COUNT(*) FROM images WHERE replyId = replies.id
                     AND state = 'active' AND key IN (SELECT value FROM json_each(?))) = ?`)
-                .bind(description, candidates, reply.id, reply.version, ...uploadBindings);
+                .bind(description, candidates, JSON.stringify([...retained, ...uploaded]), reply.id, reply.version, ...uploadBindings);
             const operation = recordOperation(env.DB, user, "reply_edited", { replyId: reply.id, issueId: reply.issueId });
             commitAttempted = true;
             env.signal?.throwIfAborted();
-            const [_editEvent, _imageResult, _detachResult, _retainedResult, _uploadedResult, result] = await env.DB.batch([
-                recordEdit, queueRemovedImages, moveRetained, attachRetained, attachUploaded, updateReply, operation,
+            const [_editEvent, _imageResult, _uploadedResult, result] = await env.DB.batch([
+                recordEdit, queueRemovedImages, attachUploaded, updateReply, operation,
             ]);
             if (!result.meta.changes) {
                 env.signal?.throwIfAborted();

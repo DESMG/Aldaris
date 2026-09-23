@@ -23,7 +23,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
             <Typography variant="h4" component="h1">{kind === "privacy" ? "隐私政策" : "使用条款"}</Typography>
             {kind === "privacy" ? <>
                 <Typography>本隐私政策说明 Aldaris 在提供团队工单协作服务时如何收集、使用、保存和共享信息，以及您可以如何管理相关数据。请在登录、提交内容或管理账户前阅读本政策，并同时阅读<Link href="/#/terms">使用条款</Link>。</Typography>
-                <Alert severity="warning">工单、评论和图片对同一站点内的已登录成员可见。图片可能因容量不足而自动清理；删除账户不会一并删除历史协作内容。请勿提交密码、访问凭据或不适合向全体成员公开的信息。</Alert>
+                <Alert severity="warning">工单、评论和图片对同一部署内的已登录成员可见。图片保留 30 天，容量不足时可能提前清理。删除账户不会一并删除历史协作内容。请勿提交密码、访问凭据或不适合向全体成员公开的信息。</Alert>
 
                 <Typography component="h2" variant="h6">一、适用范围与管理责任</Typography>
                 <Typography>本政策适用于当前 Aldaris 站点的账户、工单、评论、图片及管理功能。"本站"或"本服务"指当前团队使用的独立部署；"管理员"指负责团队账户和日常使用管理的人员；"运营者"指负责该部署及服务资源的主体。具体运营主体、管理人员和联系方式，请通过向您提供账户的团队确认。</Typography>
@@ -49,7 +49,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography component="h2" variant="h6">五、浏览器存储、草稿与缓存</Typography>
                 <Typography>本站会在您的浏览器中保存登录状态、账户资料、主题偏好和文字草稿，以便继续使用。文字草稿仅保存在您的设备上，不包含密码或未提交的图片。</Typography>
                 <Typography>草稿是否保留受浏览器会话恢复和存储清理等行为影响。退出登录不等于清除全部草稿、主题偏好或缓存。共享设备使用完毕后，请退出登录并按需要清理本站浏览器数据；请勿依靠草稿备份重要内容。</Typography>
-                <Typography>浏览器可能保留页面和图片副本，本站删除图片后，这些副本仍可能存在。清除设备上的站点数据不会删除本站保存的账户和协作记录。禁止浏览器保存数据可能影响登录或草稿功能。</Typography>
+                <Typography>浏览器可能保留页面和图片副本，本站清理图片后，这些副本仍可能存在。清除设备上的站点数据不会删除本站保存的账户和协作记录。禁止浏览器保存数据可能影响登录或草稿功能。</Typography>
 
                 <Typography component="h2" variant="h6">六、第三方服务与外部请求</Typography>
                 <Typography>Cloudflare：提供本站的运行和数据保存服务，会处理访问请求及您提交的数据。详情见<Link href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="external noopener noreferrer nofollow">Cloudflare 隐私政策</Link>。</Typography>
@@ -63,7 +63,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
 
                 <Typography component="h2" variant="h6">八、保存期限与自动清理</Typography>
                 <Typography>账户、工单、评论和操作记录会按使用和维护需要保留，没有统一的自动删除期限。退出登录不会删除这些记录。其他记录的具体留存情况请向运营者了解。</Typography>
-                <Typography>图片可能因容量不足而被自动删除，包括尚未完成的工单中的图片，删除前可能不会通知。请另行保存重要图片。</Typography>
+                <Typography>图片保留 30 天，容量不足时可能提前清理，包括尚未完成的工单中的图片。清理前可能不会通知，清理后不保证恢复，原图片位置会显示“图片已被清理”。请另行保存重要图片。</Typography>
                 <Typography>管理员或运营者可能因维护、资源限制、服务重建或停止运营清理部分或全部数据。本站不承诺永久保存、定期备份或数据恢复；请通过团队认可的方式另行保留重要内容。基础设施日志及服务商副本的留存受相关配置和服务商政策影响，请向运营者核实。</Typography>
 
                 <Typography component="h2" variant="h6">九、查阅、更正、删除与其他请求</Typography>
@@ -81,7 +81,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
             </> : <>
                 <Typography>Aldaris 采用 GNU Affero General Public License 第 3 版 (AGPL-3.0-only) 授权，仅适用第 3 版。您可以依照许可证获取、修改和再分发本软件。本使用条款不限制该许可证授予您的软件权利。请参阅<Link href="/#/license">开源许可</Link>及<Link href="https://github.com/DESMG/Aldaris" target="_blank" rel="external noopener noreferrer nofollow">源代码</Link>。</Typography>
                 <Typography>本使用条款适用于当前 Aldaris 团队工单协作站点。请在使用账户和提交内容前完整阅读，并结合<Link href="/#/privacy">隐私政策</Link>了解信息处理方式。若无法接受本服务的共享范围或留存方式，请先联系管理员安排其他协作方式。</Typography>
-                <Alert severity="warning">本站供单个团队内部协作，工单内容对同一部署内的已登录成员可见。本站不承诺持续可用、永久保存或恢复数据；容量不足时，尚未完成的工单图片也可能被自动清理。</Alert>
+                <Alert severity="warning">本站供单个团队内部协作，工单、评论和图片对同一部署内的已登录成员可见。图片保留 30 天，容量不足时可能提前清理。本站不承诺持续可用、永久保存或恢复数据。</Alert>
 
                 <Typography component="h2" variant="h6">一、服务范围与条款适用</Typography>
                 <Typography>Aldaris 提供工单创建、评论、图片提交、状态和优先级管理、成员指派及账户管理等功能。"本站"或"本服务"指当前独立部署，"您"指访问或使用本站的人员，"管理员"指团队账户和协作管理人员，"运营者"指负责该部署及服务资源的主体。</Typography>
@@ -114,7 +114,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography>上传不能替代原件归档，请另行保存重要原图。未提交图片不会随文字草稿一起保存。</Typography>
 
                 <Typography component="h2" variant="h6">七、容量、留存与数据丢失</Typography>
-                <Typography>图片可能因容量不足而被自动删除，包括尚未完成的工单中的图片，删除前可能不会通知，删除后不保证恢复。</Typography>
+                <Typography>图片保留 30 天，容量不足时可能提前清理，包括尚未完成的工单中的图片。清理前可能不会通知，清理后不保证恢复，原图片位置会显示“图片已被清理”。请另行保存重要图片。</Typography>
                 <Typography>文字草稿和缓存可能因设备、浏览器或存储变化丢失，不能作为备份。请另行保留工作必需的重要内容，并遵守团队的数据保存和保密要求。</Typography>
                 <Typography>本站不承诺永久保存账户、工单、评论、操作记录或图片，也不承诺备份、历史版本回退或恢复。维护、资源限制、故障、重建或停止运营可能导致部分或全部数据不可用或丢失。</Typography>
 

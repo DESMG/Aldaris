@@ -87,6 +87,7 @@ export default function ImageSelection({ images, onChange, disabled, retainedCou
         </Button></Box>
         <Typography variant="caption" color="text.secondary">已选 {images.length + retainedCount}/{IMAGE_MAX_COUNT} 张，{retainedCount ? "新图片" : "图片"}合计 {(images.reduce((size, file) => size + file.size, 0) / 1024).toFixed(1)} KiB{retainedCount > 0 && ` (已有 ${retainedCount} 张)`}。</Typography>
         <Typography variant="caption" color="text.secondary">可选择或粘贴静态 JPG、PNG；每张不超过 {IMAGE_MAX_BYTES / 1024 / 1024} MiB，合计不超过 {IMAGE_MAX_BYTES * IMAGE_MAX_COUNT / 1024 / 1024} MiB。</Typography>
+        <Typography variant="caption" color="text.secondary">本站图片总容量为 10 GB，图片保留 30 天，容量不足时可能提前清理，请另行保存重要图片。</Typography>
         {processing && <Typography variant="body2" role="status">正在处理图片，请稍候…</Typography>}
         {error && <Alert severity="error" onClose={() => setError("")}>{error}</Alert>}
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>

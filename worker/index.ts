@@ -83,16 +83,14 @@ async function route(request: Request, env: Env, ctx: ExecutionContext) {
     const imageMatch = url.pathname.match(/^\/api\/images\/([a-f0-9-]{36}\.webp)$/);
     if (imageMatch && request.method === "GET") {
         env.signal?.throwIfAborted();
-        const record = await env.DB.prepare("SELECT state FROM images WHERE key = ?").bind(imageMatch[1]).first<{ state: string }>();
-        if (record?.state === "deleting" || record?.state === "deleted") throw new HttpError(410, "[图片已被清理]");
-        if (record?.state !== "active") throw new HttpError(404, "图片不存在。");
+        const record = await env.DB.prepare("SELECT state, createdAt FROM images WHERE key = ?").bind(imageMatch[1]).first<{ state: string; createdAt: string }>();
+        if (!record || record.state !== "active") throw new HttpError(404, "图片不存在。");
+        const expiresAt = Date.parse(record.createdAt) + 30 * 24 * 60 * 60 * 1000;
+        if (expiresAt <= Date.now()) throw new HttpError(404, "图片不存在。");
         // Forward only the object path; credentials, query, Range and conditions stay here.
         env.signal?.throwIfAborted();
         const response = await ctx.exports.Images.fetch(new Request(new URL(`/${imageMatch[1]}`, url.origin), { signal: request.signal }));
         if (response.status === 404) {
-            env.signal?.throwIfAborted();
-            const cleared = await env.DB.prepare("SELECT 1 FROM images WHERE key = ? AND state IN ('deleting', 'deleted')").bind(imageMatch[1]).first();
-            if (cleared) throw new HttpError(410, "[图片已被清理]");
             throw new HttpError(404, "图片不存在。");
         }
         if (!response.ok) throw new HttpError(response.status === 504 ? 504 : 502, `读取图片 ${imageMatch[1]}：内部取图入口返回 HTTP ${response.status}。`);

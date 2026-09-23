@@ -14,9 +14,10 @@
         "check:worker": "tsc -p tsconfig.worker.json",
         "check": "npm run check:static && npm run check:worker",
         "build": "npm run check && vite build",
-        "deploy": "wrangler deploy && npm run migrate:remote",
+        "deploy": "wrangler deploy && npm run migrate:remote && npm run retention:remote",
         "migrate": "wrangler d1 migrations apply DB --local",
-        "migrate:remote": "wrangler d1 migrations apply DB --remote"
+        "migrate:remote": "wrangler d1 migrations apply DB --remote",
+        "retention:remote": "wrangler r2 bucket lifecycle set aldaris --file r2-lifecycle.json --force"
     },
     "dependencies": {
         "@emotion/react": "11.14.0",

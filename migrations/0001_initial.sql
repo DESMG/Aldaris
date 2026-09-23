@@ -19,6 +19,7 @@ CREATE TABLE
         title TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
         mentions TEXT NOT NULL DEFAULT '[]' CHECK (json_valid (mentions)),
+        images TEXT NOT NULL DEFAULT '[]' CHECK (json_valid (images) AND json_type (images) = 'array'),
         priority TEXT NOT NULL CHECK (priority IN ('Low', 'Medium', 'High')),
         status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'Closed')),
         stateReason TEXT CHECK (stateReason IN ('completed', 'not_planned')),
@@ -37,6 +38,7 @@ CREATE TABLE
         creationToken TEXT NOT NULL UNIQUE CHECK (length (creationToken) = 36),
         description TEXT NOT NULL DEFAULT '',
         mentions TEXT NOT NULL DEFAULT '[]' CHECK (json_valid (mentions)),
+        images TEXT NOT NULL DEFAULT '[]' CHECK (json_valid (images) AND json_type (images) = 'array'),
         version INTEGER NOT NULL DEFAULT 1,
         createdAt TEXT NOT NULL
     );
@@ -123,7 +125,6 @@ CREATE TABLE
         key TEXT PRIMARY KEY,
         issueId INTEGER REFERENCES issues (id) ON DELETE CASCADE,
         replyId INTEGER REFERENCES replies (id) ON DELETE CASCADE,
-        position INTEGER,
         contentType TEXT NOT NULL,
         byteSize INTEGER NOT NULL CHECK (byteSize > 0),
         state TEXT NOT NULL CHECK (
@@ -132,39 +133,32 @@ CREATE TABLE
                 'uploading',
                 'uploaded',
                 'active',
-                'deleting',
-                'deleted'
+                'deleting'
             )
         ),
         createdAt TEXT NOT NULL,
-        checkedAt TEXT,
         CHECK (
             (
-                state IN ('active', 'deleting', 'deleted')
-                AND position IS NOT NULL
-                AND position >= 0
+                state IN ('active', 'deleting')
                 AND ((issueId IS NOT NULL) != (replyId IS NOT NULL))
             )
             OR (
                 state != 'active'
                 AND issueId IS NULL
                 AND replyId IS NULL
-                AND position IS NULL
             )
         )
     );
 
-CREATE UNIQUE INDEX images_issue_position ON images (issueId, position)
+CREATE INDEX images_issue ON images (issueId)
 WHERE
     issueId IS NOT NULL;
 
-CREATE UNIQUE INDEX images_reply_position ON images (replyId, position)
+CREATE INDEX images_reply ON images (replyId)
 WHERE
     replyId IS NOT NULL;
 
-CREATE INDEX images_state ON images (state, createdAt);
-
-CREATE INDEX images_check ON images (state, checkedAt, key);
+CREATE INDEX images_state ON images (state, createdAt, key);
 
 CREATE TRIGGER images_reserve BEFORE INSERT ON images BEGIN
 SELECT
@@ -192,9 +186,7 @@ WHERE
 
 END;
 
-CREATE TRIGGER images_release AFTER
-UPDATE OF state ON images WHEN OLD.state != 'deleted'
-AND NEW.state = 'deleted' BEGIN
+CREATE TRIGGER images_release AFTER DELETE ON images BEGIN
 UPDATE image_capacity
 SET
     byteSize = byteSize - OLD.byteSize
@@ -204,20 +196,14 @@ WHERE
 END;
 
 CREATE TRIGGER images_no_resurrection BEFORE
-UPDATE OF state ON images WHEN (
-    OLD.state = 'deleted'
-    AND NEW.state != 'deleted'
-)
-OR (
-    OLD.state = 'deleting'
-    AND NEW.state NOT IN ('deleting', 'deleted')
-) BEGIN
+UPDATE OF state ON images WHEN OLD.state = 'deleting'
+AND NEW.state != 'deleting' BEGIN
 SELECT
     RAISE (ABORT, 'image_already_cleared');
 
 END;
 
-CREATE TRIGGER images_delete_guard BEFORE DELETE ON images WHEN OLD.state != 'deleted' BEGIN
+CREATE TRIGGER images_delete_guard BEFORE DELETE ON images WHEN OLD.state != 'deleting' BEGIN
 SELECT
     RAISE (ABORT, 'image_delete_not_confirmed');
 

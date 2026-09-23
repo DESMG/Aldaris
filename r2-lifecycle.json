@@ -1,0 +1,30 @@
+{
+    "rules": [
+        {
+            "id": "images-30-days",
+            "enabled": true,
+            "conditions": {
+                "prefix": ""
+            },
+            "deleteObjectsTransition": {
+                "condition": {
+                    "type": "Age",
+                    "maxAge": 2592000
+                }
+            }
+        },
+        {
+            "id": "abort-multipart-1-hour",
+            "enabled": true,
+            "conditions": {
+                "prefix": ""
+            },
+            "abortMultipartUploadsTransition": {
+                "condition": {
+                    "type": "Age",
+                    "maxAge": 3600
+                }
+            }
+        }
+    ]
+}

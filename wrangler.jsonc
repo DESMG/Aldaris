@@ -39,7 +39,7 @@
     "r2_buckets": [
         {
             "binding": "IMAGES",
-            "bucket_name": "aldaris-images"
+            "bucket_name": "aldaris"
         }
     ],
     "assets": {

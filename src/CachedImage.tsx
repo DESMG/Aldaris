@@ -33,7 +33,7 @@ export default function CachedImage({ src, alt, sx }: { src: string; alt: string
             setImage({ src, generation, objectUrl });
         }).catch(error => {
             if (active && generation === getApiSessionGeneration()) {
-                if (error instanceof ApiError && error.status === 410) setCleared(true);
+                if (error instanceof ApiError && error.status === 404) setCleared(true);
                 else setError(`读取图片失败：${String(error)}`);
             }
         });

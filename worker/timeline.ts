@@ -24,9 +24,11 @@ const source = `
 const select = `
     SELECT t.id, t.kind, t.actorId, t.createdAt, users.name AS actorName,
         replies.description, ${mentionDetails("replies.mentions")} AS mentions,
-        (SELECT json_group_array(key) FROM (SELECT key FROM images
-            WHERE replyId = replies.id ORDER BY position)) AS images,
-        (SELECT json_group_array(key) FROM images WHERE replyId = replies.id AND state IN ('deleting', 'deleted')) AS clearedImages,
+        replies.images,
+        (SELECT json_group_array(value) FROM json_each(replies.images) WHERE NOT EXISTS (
+            SELECT 1 FROM images WHERE images.key = json_each.value AND state = 'active'
+                AND createdAt > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')
+        )) AS clearedImages,
         replies.version, events.details
     FROM timeline t LEFT JOIN users ON users.id = t.actorId
     LEFT JOIN replies ON t.kind = 'reply' AND replies.id = t.id
