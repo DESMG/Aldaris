@@ -264,7 +264,7 @@ export default function App() {
                             <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
                                 <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                                     <Typography component="a" href="/#/" variant="h4" sx={{ color: "text.primary", textDecoration: "none" }}>问题管理系统</Typography>
-                                    {pathname !== "/" && <Button href="/#/" color="inherit" variant="outlined">← 返回列表</Button>}
+                                    {pathname !== "/" && <Button href={`/#${window.history.state?.issueList?.path ?? "/"}`} color="inherit" variant="outlined">← 返回列表</Button>}
                                 </Stack>
                                 <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
                                     <ThemeToggle />

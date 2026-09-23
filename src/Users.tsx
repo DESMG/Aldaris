@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, Avatar, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Paper, Stack, TextField, Typography, useMediaQuery } from "@mui/material";
 import { api, ApiError, cachedJson, getCachedJson, navigate, getApiSessionGeneration, assertApiSession } from "./api";
 import type { User } from "./api";
@@ -25,6 +25,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     const [users, setUsers] = useState<ManagedUser[]>(() => cached?.users ?? []);
     const [editing, setEditing] = useState<ManagedUser | null>(null);
     const [editOpen, setEditOpen] = useState(false);
+    const editorTrigger = useRef<HTMLElement | null>(null);
     const [deleting, setDeleting] = useState<ManagedUser | null>(null);
     const [conflict, setConflict] = useState(false);
     const [latest, setLatest] = useState<ManagedUser | null>(null);
@@ -43,6 +44,12 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
     const mounted = useRef(true);
     useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
+    useLayoutEffect(() => {
+        if (editing !== null || saving || loading) return;
+        editorTrigger.current?.focus({ preventScroll: true });
+        editorTrigger.current = null;
+    }, [editing, saving, loading]);
+
     async function closeEditor() {
         if (saving || reloading || (dirty && !await confirmAction("放弃尚未保存的用户资料修改？"))) return;
         clearGuard();
@@ -57,6 +64,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
         let active = true;
         api(`/api/admin/users/${saved.id}`).then(response => response.json()).then((data: { user: ManagedUser }) => {
             if (!active || restoredDraft.current !== saved) return;
+            editorTrigger.current = document.activeElement as HTMLElement;
             setEditing({ ...data.user, version: saved.version });
             setConflict(data.user.version !== saved.version);
             setEditOpen(true);
@@ -108,7 +116,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
         </Stack>
         {draft.error && <Alert severity="error">{draft.error}</Alert>}
         {loading && users.length === 0 && <Typography role="status">正在读取用户…</Typography>}
-        <Dialog open={editOpen} onClose={closeEditor} fullWidth maxWidth="xs" aria-labelledby="edit-user-title" transitionDuration={reducedMotion ? 0 : 440} slotProps={{ transition: { onExited: () => { setEditing(null); setPassword(""); setConfirmPassword(""); } }, paper: { sx: { p: { xs: 3, sm: 4 }, maxWidth: 440 } } }}>
+        <Dialog open={editOpen} onClose={closeEditor} disableRestoreFocus fullWidth maxWidth="xs" aria-labelledby="edit-user-title" transitionDuration={reducedMotion ? 0 : 440} slotProps={{ transition: { onExited: () => { setEditing(null); setPassword(""); setConfirmPassword(""); } }, paper: { sx: { p: { xs: 3, sm: 4 }, maxWidth: 440 } } }}>
             {editing &&
                 <Box component="form" key={editing.id} onSubmit={async event => {
                     event.preventDefault();
@@ -193,7 +201,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                     <Typography variant="caption" color="text.secondary">{account.username}</Typography>
                 </Box>
                 <Chip size="small" label={account.role === "admin" ? "管理员" : "用户"} variant="outlined" />
-                <Button variant="outlined" disabled={saving || loading || editing !== null} onClick={() => { restoredDraft.current = null; setEditing(account); draft.setValue({ id: account.id, version: account.version, name: account.name, username: account.username }); setPassword(""); setConfirmPassword(""); setConflict(false); setLatest(null); setEditOpen(true); setError(""); }}>编辑</Button>
+                <Button variant="outlined" disabled={saving || loading || editing !== null} onClick={event => { editorTrigger.current = event.currentTarget; restoredDraft.current = null; setEditing(account); draft.setValue({ id: account.id, version: account.version, name: account.name, username: account.username }); setPassword(""); setConfirmPassword(""); setConflict(false); setLatest(null); setEditOpen(true); setError(""); }}>编辑</Button>
                 <Button variant="text" color="error" disabled={saving || loading || account.id === user.id} onClick={() => { setError(""); setDeleteConflict(false); setDeleting(account); }}>删除</Button>
             </Stack>
         </Paper>)}

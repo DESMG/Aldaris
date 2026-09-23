@@ -5,7 +5,7 @@ import {
 } from "@mui/material";
 
 import { cachedJson, getCachedJson, navigate } from "./api";
-import type { IssueSummary, User } from "./api";
+import type { IssueListContext, IssueSummary, User } from "./api";
 import CreateIssueDialog from "./CreateIssueDialog";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
 
@@ -36,7 +36,17 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
     const [loadedPage, setLoadedPage] = useState(page);
     const previousStatus = useRef(status);
     const previousPage = useRef(page);
+    const returnContext = useRef<IssueListContext | undefined>(window.history.state?.issueList);
     const pages = Math.max(1, Math.ceil(counts[loadedStatus] / 10));
+
+    useLayoutEffect(() => {
+        const context = returnContext.current;
+        if (!context || loading || error || status !== loadedStatus || page !== loadedPage) return;
+        returnContext.current = undefined;
+        if (context.path !== (window.location.hash.slice(1) || "/")) return;
+        window.scrollTo(0, context.scrollY);
+        if (context.issueId !== null) document.getElementById(`issue-${context.issueId}`)?.focus({ preventScroll: true });
+    }, [loading, error, status, page, loadedStatus, loadedPage]);
 
     useLayoutEffect(() => {
         resultsExitAnimation.current?.cancel();
@@ -141,7 +151,7 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
 
                 <Stack spacing={2}>
                     {issues.map((issue) => (
-                        <Paper component="a" href={`/#/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
+                        <Paper component="a" id={`issue-${issue.id}`} href={`/#/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
                             <Stack spacing={2}>
                                 <Typography
                                     title={`#${issue.id} ${issue.title}`}

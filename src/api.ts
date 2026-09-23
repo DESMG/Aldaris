@@ -192,14 +192,24 @@ export async function api(url: string, options?: RequestInit & { expectedSession
     });
 }
 
+export type IssueListContext = { path: string; scrollY: number; issueId: number | null };
+
 export async function navigate(path: string) {
+    const currentPath = window.location.hash.slice(1) || "/";
+    if (path === currentPath) return true;
     if (hasUnsavedDrafts()) {
         const startingUrl = window.location.href;
         const startingSession = sessionGeneration;
         if (!await confirmDraftNavigation() || window.location.href !== startingUrl || sessionGeneration !== startingSession) return false;
     }
+    let issueList: IssueListContext | undefined = window.history.state?.issueList;
+    if (currentPath.split("?")[0] === "/") {
+        const detail = path.split("?")[0].match(/^\/issues\/(\d+)$/);
+        issueList = { path: currentPath, scrollY: window.scrollY, issueId: detail ? Number(detail[1]) : null };
+        window.history.replaceState({ ...window.history.state, issueList }, "");
+    }
     const index = (window.history.state?.aldarisIndex ?? 0) + 1;
-    window.history.pushState({ aldarisIndex: index }, "", `/#${path}`);
+    window.history.pushState({ aldarisIndex: index, issueList }, "", `/#${path}`);
     window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
     window.scrollTo(0, 0);
     return true;
