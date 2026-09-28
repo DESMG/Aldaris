@@ -15,18 +15,18 @@ export type IssueSummary = {
     status: "Open" | "Closed";
     stateReason: "completed" | "not_planned" | null;
     createdAt: string;
-    authorName: string | null;
+    authorName: string;
     assignees: Pick<Assignee, "id" | "name" | "role">[];
 };
 export type Issue = Omit<IssueSummary, "assignees"> & {
-    authorId: number | null; assignees: Assignee[];
+    authorId: number; assignees: Assignee[];
     description: string; images: string[]; clearedImages: string[]; mentions: Mention[]; assignmentVersion: number; version: number;
 };
 export type Reply = {
     id: number; version: number; authorId: number; authorName: string;
     description: string; images: string[]; clearedImages: string[]; mentions: Mention[]; createdAt: string;
 };
-type Event = { id: number; actorName: string | null; createdAt: string };
+type Event = { id: number; actorName: string; createdAt: string };
 type AssignmentSnapshot = { userId: number; role: AssignmentRole; name: string };
 export type TimelineEntry = (Reply & { kind: "reply" })
     | (Event & { kind: "status"; details: { before: Issue["status"]; after: Issue["status"]; stateReason: Issue["stateReason"] } })

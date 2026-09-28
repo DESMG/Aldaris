@@ -131,7 +131,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         <Typography component="h1" variant="h5" sx={{ overflowWrap: "anywhere" }}>{issue.title} <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>#{issue.id}</Box></Typography>
                         <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                             <Chip label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
-                            <Typography variant="body2" color="text.secondary">{issue.authorName ?? "匿名"} 创建了此工单</Typography>
+                            <Typography variant="body2" color="text.secondary">{issue.authorName} 创建了此工单</Typography>
                         </Stack>
                     </Stack>
                     <Stack spacing={3} aria-label="工单时间线" sx={{
@@ -140,7 +140,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         "& > *": { position: "relative" },
                     }}>
                         <Card variant="outlined" sx={{ boxShadow: "none", borderRadius: 1 }}>
-                            <CardHeader avatar={<Avatar>{(issue.authorName ?? "匿").slice(0, 1)}</Avatar>} title={issue.authorName ?? "匿名"} subheader={new Date(issue.createdAt).toLocaleString("sv-SE")} sx={{ bgcolor: "var(--surface-muted)" }} />
+                            <CardHeader avatar={<Avatar>{issue.authorName.slice(0, 1)}</Avatar>} title={issue.authorName} subheader={new Date(issue.createdAt).toLocaleString("sv-SE")} sx={{ bgcolor: "var(--surface-muted)" }} />
                             <Divider />
                             <CardContent><Content description={issue.description} images={issue.images} clearedImages={issue.clearedImages} mentions={issue.mentions} /></CardContent>
                         </Card>
@@ -157,7 +157,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                 </Avatar>
                                 <Stack spacing={0.5} sx={{ minWidth: 0 }}>
                                     <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
-                                        <Box component="span" sx={{ fontWeight: 700 }}>{reply.actorName ?? "匿名"}</Box>{" "}
+                                        <Box component="span" sx={{ fontWeight: 700 }}>{reply.actorName}</Box>{" "}
                                         {reply.kind === "status" ? (reply.details.after === "Open" ? "重新打开了工单" : (reply.details.before === "Closed" ? "更改了关闭原因 (" : "关闭了工单 (") + (reply.details.stateReason === "completed" ? "已完成" : "已关闭") + ")")
                                             : reply.kind === "priority" ? <>加急了工单，当前优先级 <Chip component="span" size="small" variant="outlined" label={{ Low: "低", Medium: "中", High: "高" }[reply.details.after]}
                                                 color={reply.details.after === "High" ? "error" : reply.details.after === "Medium" ? "warning" : "info"} /></>

@@ -7,7 +7,7 @@ import { mentionDetails } from "./mentions";
 type Boundary = [string, string, number];
 type Cursor = { issueId: string; after: Boundary; before: Boundary };
 type Row = {
-    id: number; kind: TimelineEntry["kind"]; actorId: number | null; actorName: string | null;
+    id: number; kind: TimelineEntry["kind"]; actorId: number; actorName: string;
     createdAt: string; description: string | null; images: string | null; clearedImages: string;
     version: number | null; details: string | null; mentions: string;
 };
@@ -30,14 +30,14 @@ const select = `
                 AND createdAt > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-30 days')
         )) AS clearedImages,
         replies.version, events.details
-    FROM timeline t LEFT JOIN users ON users.id = t.actorId
+    FROM timeline t JOIN users ON users.id = t.actorId
     LEFT JOIN replies ON t.kind = 'reply' AND replies.id = t.id
     LEFT JOIN events ON t.kind != 'reply' AND events.id = t.id
 `;
 
 function entry(row: Row): TimelineEntry {
     if (row.kind === "reply") return {
-        id: row.id, kind: "reply", authorId: row.actorId!, authorName: row.actorName!,
+        id: row.id, kind: "reply", authorId: row.actorId, authorName: row.actorName,
         createdAt: row.createdAt, description: row.description!, images: JSON.parse(row.images!), clearedImages: JSON.parse(row.clearedImages), mentions: JSON.parse(row.mentions), version: row.version!,
     };
     return { id: row.id, kind: row.kind, actorName: row.actorName, createdAt: row.createdAt, details: JSON.parse(row.details!) };
@@ -76,7 +76,9 @@ export async function timeline(request: Request, env: Env, issueId: string) {
         total = (countResult.results[0] as { total: number }).total;
         const rows = (middleResult.results as Row[]).reverse();
         entries = rows.map(entry);
-        hiddenCount = Math.max(0, (hiddenResult.results[0] as { total: number }).total - rows.length);
+        const rangeTotal = (hiddenResult.results[0] as { total: number }).total;
+        hiddenCount = rangeTotal - rows.length;
+        if (hiddenCount < 0) throw new Error(`读取工单 ${issueId} 时间线：游标 ${before} 范围内共 ${rangeTotal} 条记录，但查询返回 ${rows.length} 条。`);
         beforeCursor = hiddenCount ? encode({ issueId, after: cursor.after, before: boundary(rows[0]) }) : null;
     } else {
         const count = env.DB.prepare(source + " SELECT COUNT(*) AS total FROM timeline").bind(issueId, issueId);
@@ -90,7 +92,8 @@ export async function timeline(request: Request, env: Env, issueId: string) {
         const seen = new Set(first.map(row => row.kind + ":" + row.id));
         const rows = [...first, ...last.filter(row => !seen.has(row.kind + ":" + row.id))];
         entries = rows.map(entry);
-        hiddenCount = Math.max(0, total - rows.length);
+        hiddenCount = total - rows.length;
+        if (hiddenCount < 0) throw new Error(`读取工单 ${issueId} 时间线：共 ${total} 条记录，但首尾查询返回 ${rows.length} 条。`);
         beforeCursor = hiddenCount ? encode({ issueId, after: boundary(first.at(-1)!), before: boundary(last[0]) }) : null;
     }
     const target = url.searchParams.get("target");

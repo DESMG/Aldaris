@@ -14,7 +14,7 @@ CREATE TABLE
 CREATE TABLE
     issues (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        authorId INTEGER REFERENCES users (id),
+        authorId INTEGER NOT NULL REFERENCES users (id),
         creationToken TEXT NOT NULL UNIQUE CHECK (length (creationToken) = 36),
         title TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
@@ -59,7 +59,7 @@ CREATE TABLE
     events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         channel TEXT NOT NULL DEFAULT 'operation' CHECK (channel IN ('operation', 'timeline')),
-        actorId INTEGER REFERENCES users (id),
+        actorId INTEGER NOT NULL REFERENCES users (id),
         targetId INTEGER REFERENCES users (id),
         issueId INTEGER REFERENCES issues (id) ON DELETE CASCADE,
         action TEXT NOT NULL CHECK (

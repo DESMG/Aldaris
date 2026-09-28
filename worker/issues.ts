@@ -54,7 +54,7 @@ export async function issues(request: Request, env: Env, user: User) {
                             AND members.deletedAt IS NULL
                     ) AS assignees
                 FROM issues
-                LEFT JOIN users ON users.id = issues.authorId
+                JOIN users ON users.id = issues.authorId
                 WHERE status = ?
                 ORDER BY issues.id DESC LIMIT 10 OFFSET ?
             `)
@@ -93,7 +93,7 @@ export async function issues(request: Request, env: Env, user: User) {
                             AND members.deletedAt IS NULL
                     ) AS assignees
                 FROM issues
-                LEFT JOIN users ON users.id = issues.authorId
+                JOIN users ON users.id = issues.authorId
                 WHERE issues.id = ?
             `)
             .bind(detailMatch[1]).first<IssueRow>();
@@ -317,7 +317,7 @@ export async function issues(request: Request, env: Env, user: User) {
     const assignmentMatch = url.pathname.match(/^\/api\/issues\/(\d+)\/assignees$/);
     if (assignmentMatch && request.method === "POST") {
         env.signal?.throwIfAborted();
-        const issue = await env.DB.prepare("SELECT authorId, assignmentVersion FROM issues WHERE id = ?").bind(assignmentMatch[1]).first<{ authorId: number | null; assignmentVersion: number }>();
+        const issue = await env.DB.prepare("SELECT authorId, assignmentVersion FROM issues WHERE id = ?").bind(assignmentMatch[1]).first<{ authorId: number; assignmentVersion: number }>();
         if (!issue) return Response.json({ error: "指派失败：未找到该工单。" }, { status: 404 });
         if (user.role !== "admin" && issue.authorId !== user.id) return Response.json({ error: "只有作者或管理员可以指派负责人。" }, { status: 403 });
         if (request.headers.get("If-Match") !== `"${issue.assignmentVersion}"`) return Response.json({ error: "指派失败：负责人已被修改，请刷新页面后重新编辑。" }, { status: 409 });
