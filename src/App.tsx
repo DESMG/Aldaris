@@ -341,7 +341,7 @@ export default function App() {
                 <Dialog open={pausedAccount !== null} className="reauthentication-dialog" fullWidth maxWidth="sm" sx={{ zIndex: theme => theme.zIndex.modal + 10 }}>
                     <DialogTitle>重新登录以恢复草稿</DialogTitle>
                     <DialogContent>
-                        <Typography sx={{ mb: 2, overflowWrap: "anywhere" }}>登录已失效或账户已切换，@{pausedAccount?.username} 的未提交内容仍保留在当前页面。请重新登录原账户；刷新后可恢复已保存的文字，图片和密码需重新填写，关闭标签页后不承诺恢复。</Typography>
+                        <Typography sx={{ mb: 2, overflowWrap: "anywhere" }}>登录已失效或账户已切换。请使用 @{pausedAccount?.username} 重新登录以继续编辑。</Typography>
                         {pausedAccount && <AuthPage key={pausedAccount.id} mode="login" user={null} resumeUserId={pausedAccount.id} onUserChange={handleUserChange} />}
                     </DialogContent>
                     <DialogActions><Button color="inherit" onClick={async () => {

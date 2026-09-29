@@ -194,7 +194,7 @@ export default function Users({ user, onUserChange }: { user: User; onUserChange
                             </>}
                         </VersionConflictPanel>
                         <UserIdentityFields value={{ name: editName, username: editUsername }} onChange={value => draft.setValue({ ...draft.value, ...value })} disabled={saving || reloading} />
-                        <Typography variant="caption" color="text.secondary">用户名和昵称在本标签页自动保存；密码需重新填写。</Typography>
+                        <Typography variant="caption" color="text.secondary">用户名和昵称自动保存；刷新后可恢复，密码需重新填写。</Typography>
                         <NewPasswordFields
                             passwordName="password"
                             passwordLabel="新密码"

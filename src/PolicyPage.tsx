@@ -46,9 +46,9 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography>运营者处理外部披露请求时，应核验依据和范围，仅在具有适用法律依据、必要授权或其他合法理由时提供必要信息。具体请求及处理情况请向运营者了解。</Typography>
 
                 <Typography component="h2" variant="h6">五、浏览器存储、草稿与缓存</Typography>
-                <Typography>本站会在您的浏览器中保存登录状态、账户资料、主题偏好和文字草稿，以便继续使用。文字草稿仅保存在您的设备上，不包含密码或未提交的图片。</Typography>
-                <Typography>草稿是否保留受浏览器会话恢复和存储清理等行为影响。退出登录不等于清除全部草稿、主题偏好或缓存。共享设备使用完毕后，请退出登录并按需要清理本站浏览器数据；请勿依靠草稿备份重要内容。</Typography>
-                <Typography>浏览器可能保留页面和图片副本，本站清理图片后，这些副本仍可能存在。清除设备上的站点数据不会删除本站保存的账户和协作记录。禁止浏览器保存数据可能影响登录或草稿功能。</Typography>
+                <Typography>本站在浏览器中保存登录状态、账户资料、主题偏好和文字草稿。文字草稿只保存在当前浏览器标签页，不含密码和未提交图片。</Typography>
+                <Typography>刷新后可恢复文字草稿；图片和密码不会保存。退出登录后，文字草稿仍保留在当前浏览器标签页；使用原账户登录可恢复。关闭标签页后不保证恢复草稿。清除本站浏览器数据会删除文字草稿，不影响已提交的内容。</Typography>
+                <Typography>浏览器可能缓存页面和图片；本站清理图片后，设备上的副本仍可能存在。禁用浏览器存储可能影响登录和草稿功能。</Typography>
 
                 <Typography component="h2" variant="h6">六、第三方服务与外部请求</Typography>
                 <Typography>Cloudflare：提供本站的运行和数据保存服务，会处理访问请求及您提交的数据。详情见<Link href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="external noopener noreferrer nofollow">Cloudflare 隐私政策</Link>。</Typography>
@@ -90,7 +90,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography>请使用分配给您本人的账户，提供准确且可供团队识别的资料，不冒用身份、不出借账户、不公开凭据。妥善交接初始或重置密码，避免与其他服务重复使用密码。发现泄露或异常操作时，应及时修改密码并联系管理员。</Typography>
                 <Typography>在其他设备登录或账户资料发生变化后，您可能需要重新登录。</Typography>
                 <Typography>多次登录失败后，您可能需要等待一段时间才能重试，具体以页面提示为准。同一网络的其他成员也可能受影响。请勿重复猜测密码或绕过限制。密码强度提示和泄露查询只是辅助措施，不能证明密码绝对安全。</Typography>
-                <Typography>共享设备使用完毕后应退出登录，并按需要清理本站浏览器数据。草稿、缓存及他人已下载的内容不会因账户退出或失效而全部消失。</Typography>
+                <Typography>共享设备使用完毕后应退出登录，并清理本站浏览器数据。退出登录后，文字草稿仍保留在当前浏览器标签页；使用原账户登录可恢复。</Typography>
 
                 <Typography component="h2" variant="h6">三、团队共享与协作责任</Typography>
                 <Typography>本站的工单、评论、图片和时间线对全体已登录成员可见，包括未被指派或提及的成员。请勿提交不适合在团队内共享的内容。</Typography>

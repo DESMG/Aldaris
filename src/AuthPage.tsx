@@ -116,7 +116,7 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
                 {success && <Alert severity="success">{success}</Alert>}
                 {mode === "create-user" && <UserIdentityFields value={draft.value} onChange={draft.setValue} disabled={saving} nameAutoComplete="off" usernameAutoComplete="username" />}
                 {mode === "login" && <TextField name="username" label="用户名" autoComplete="username" value={draft.value.username} onChange={event => draft.setValue({ ...draft.value, username: event.target.value })} required disabled={saving} slotProps={{ htmlInput: { maxLength: USERNAME_MAX_LENGTH, pattern: "[A-Za-z]+[0-9]*" } }} />}
-                {mode === "create-user" && <Typography variant="caption" color="text.secondary">用户名和昵称在本标签页自动保存；密码需重新填写。</Typography>}
+                {mode === "create-user" && <Typography variant="caption" color="text.secondary">用户名和昵称自动保存；刷新后可恢复，密码需重新填写。</Typography>}
                 {mode === "create-user" && <TextField select name="role" label="账户角色" value={role} onChange={event => { setRole(event.target.value as User["role"]); setDirty(true); }} disabled={saving} helperText="产品、开发使用管理员；测试、投放使用用户。"><MenuItem value="user">用户</MenuItem><MenuItem value="admin">管理员</MenuItem></TextField>}
                 {mode !== "create-user" && <TextField name="password" label={mode === "account" ? "当前密码" : "密码"} type="password" autoComplete="current-password" required disabled={saving} slotProps={{ htmlInput: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } }} />}
                 {mode !== "login" && <NewPasswordFields

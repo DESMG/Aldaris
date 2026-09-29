@@ -63,7 +63,7 @@ export function ReplyForm({ issueId, saving, blocked, editing, onReply, onStatus
             <Typography component="h2" variant="h6">参与讨论</Typography>
             {draft.error && <Alert severity="error">{draft.error}</Alert>}
             <Description label="回复内容" value={description} onChange={value => { submission.current = null; draft.setValue({ description: value, requestKey: "" }); }} images={images} onImagesChange={files => { submission.current = null; draft.update({ requestKey: "" }); setImages(files); }} disabled={saving} onProcessingChange={setProcessing} />
-            <Typography variant="caption" color="text.secondary">文字在本标签页自动保存；刷新后请重新选择未提交的图片。</Typography>
+            <Typography variant="caption" color="text.secondary">文字草稿自动保存；刷新后可恢复，图片不会保存。</Typography>
             {editing && <Typography variant="body2" color="text.secondary">请先保存或取消评论编辑，再发表新回复。</Typography>}
             <Box sx={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 1 }}>
                 {children(hasContent, submit, disabled)}
@@ -142,7 +142,7 @@ export function EditReplyForm({ reply, saving, onSave, onCancel }: {
                 </>}
             </VersionConflictPanel>
             <Description label="评论内容" value={description} onChange={value => draft.setValue({ ...draft.value, description: value })} images={images} onImagesChange={setImages} disabled={saving || reloading} retainedCount={retainedImages.length} onProcessingChange={setProcessing} />
-            <Typography variant="caption" color="text.secondary">文字在本标签页自动保存；刷新后再次编辑即可恢复，未提交的图片需重新选择。</Typography>
+            <Typography variant="caption" color="text.secondary">文字草稿自动保存；刷新后再次编辑可恢复，图片不会保存。</Typography>
             {retainedImages.map((key, index) => <Stack key={key} spacing={1}>
                 <Content description="" images={[key]} clearedImages={clearedImages} />
                 <Box><Button disabled={saving || processing} onClick={() => draft.setValue({ ...draft.value, retainedImages: retainedImages.filter(image => image !== key) })}>移除图片 {index + 1}</Button></Box>

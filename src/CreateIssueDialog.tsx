@@ -127,7 +127,7 @@ export default function CreateIssueDialog({ origin, onClose }: { origin: DOMRect
                     {draft.error && <Alert severity="error">{draft.error}</Alert>}
                     <TextField label="标题" required autoFocus fullWidth disabled={saving} slotProps={{ htmlInput: { maxLength: TITLE_MAX_LENGTH } }} value={title} onChange={event => { submission.current = null; draft.setValue({ title: event.target.value, description, requestKey: "" }); }} />
                     <Description label="描述" value={description} onChange={value => { submission.current = null; draft.setValue({ title, description: value, requestKey: "" }); }} images={images} onImagesChange={files => { submission.current = null; draft.update({ requestKey: "" }); setImages(files); }} disabled={saving} onProcessingChange={setProcessing} />
-                    <Alert severity="info">文字在本标签页自动保存；刷新后请重新选择未提交的图片。</Alert>
+                    <Alert severity="info">文字草稿自动保存；刷新后可恢复，图片不会保存。</Alert>
                 </Stack>
             </DialogContent>
             <DialogActions>
