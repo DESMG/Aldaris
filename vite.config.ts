@@ -40,6 +40,26 @@ export default defineConfig({
                         entryFileNames: "assets/[name].[hash].js",
                         chunkFileNames: "assets/[name].[hash].js",
                         assetFileNames: "assets/[name].[hash].[ext]",
+                        codeSplitting: {
+                            groups: [
+                                {
+                                    name: "mui",
+                                    test: /node_modules[\\/]@mui[\\/]/,
+                                },
+                                {
+                                    name: "emotion",
+                                    test: /node_modules[\\/]@emotion[\\/]/,
+                                },
+                                {
+                                    name: "react",
+                                    test: /node_modules[\\/](?:react|react-dom|scheduler)[\\/]/,
+                                },
+                                {
+                                    name: "vendor",
+                                    test: /node_modules[\\/]/,
+                                },
+                            ],
+                        },
                     },
                 },
             },
