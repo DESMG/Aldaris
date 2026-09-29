@@ -256,11 +256,7 @@ export async function issues(request: Request, env: Env, user: User) {
         const files = await readImages(form, retained.length);
         if (retained.some(key => !oldImages.includes(key)) || new Set(retained).size !== retained.length) return Response.json({ error: "评论图片无效。" }, { status: 400 });
         if (description.length > DESCRIPTION_MAX_LENGTH || (!description.trim() && !retained.length && !files.length)) return Response.json({ error: "评论不能为空，文字最多 20000 个字符。" }, { status: 400 });
-        const previousMentions: { username: string; userId: number }[] = JSON.parse(reply.mentions);
-        const mentionedUsers = new Map(previousMentions.map(mention => [mention.username, mention.userId]));
-        const candidates = JSON.stringify(mentionCandidates(description).map(candidate => ({
-            ...candidate, userId: mentionedUsers.get(candidate.username) ?? null,
-        })));
+        const candidates = JSON.stringify(mentionCandidates(description));
         let uploaded: string[] = [];
         let commitAttempted = false;
         try {

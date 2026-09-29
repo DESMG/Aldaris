@@ -106,8 +106,27 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
             INSERT INTO events (actorId, targetId, action, details, createdAt)
             SELECT ?, ?, 'user_deleted', ?, ? WHERE changes() > 0
         `).bind(admin.id, target.id, JSON.stringify({ username: target.username, name: target.name }), deletedAt);
+        const clearIssueMentions = env.DB.prepare(`
+            UPDATE issues SET mentions = COALESCE((SELECT json_group_array(json(reference.value))
+                FROM json_each(issues.mentions) AS reference
+                WHERE json_extract(reference.value, '$.userId') != ?), '[]')
+            WHERE EXISTS (SELECT 1 FROM json_each(issues.mentions) AS reference
+                WHERE json_extract(reference.value, '$.userId') = ?)
+                AND EXISTS (SELECT 1 FROM users WHERE id = ? AND username = ? AND deletedAt = ?)
+        `).bind(target.id, target.id, target.id, `deleted:${target.id}`, deletedAt);
+        const clearReplyMentions = env.DB.prepare(`
+            UPDATE replies SET mentions = COALESCE((SELECT json_group_array(json(reference.value))
+                FROM json_each(replies.mentions) AS reference
+                WHERE json_extract(reference.value, '$.userId') != ?), '[]')
+            WHERE EXISTS (SELECT 1 FROM json_each(replies.mentions) AS reference
+                WHERE json_extract(reference.value, '$.userId') = ?)
+                AND EXISTS (SELECT 1 FROM users WHERE id = ? AND username = ? AND deletedAt = ?)
+        `).bind(target.id, target.id, target.id, `deleted:${target.id}`, deletedAt);
         env.signal?.throwIfAborted();
-        const [_events, _versions, _assignments, removed] = await env.DB.batch([recordAssignments, bumpAssignments, removeAssignments, removeUser, audit]);
+        const [_events, _versions, _assignments, removed] = await env.DB.batch([
+            recordAssignments, bumpAssignments, removeAssignments, removeUser, audit,
+            clearIssueMentions, clearReplyMentions,
+        ]);
         if (!removed.meta.changes) throw new HttpError(409, "删除用户：用户资料或管理员权限已变化，或该用户是最后一位管理员。请刷新后重新选择。");
         return Response.json({ ok: true });
     }
@@ -134,8 +153,29 @@ export async function adminUsers(request: Request, env: Env, admin: User | null)
         SELECT ?, ?, ?, ?, ? WHERE changes() > 0
     `).bind(admin.id, target.id, password ? "password_reset" : "user_updated",
         JSON.stringify({ previousName: target.name, name, previousUsername: target.username, username, passwordChanged: !!password }), new Date().toISOString());
+    const clearIssueMentions = env.DB.prepare(`
+        UPDATE issues SET mentions = COALESCE((SELECT json_group_array(json(reference.value))
+            FROM json_each(issues.mentions) AS reference
+            WHERE json_extract(reference.value, '$.userId') != ?), '[]')
+        WHERE EXISTS (SELECT 1 FROM json_each(issues.mentions) AS reference
+            WHERE json_extract(reference.value, '$.userId') = ?)
+            AND EXISTS (SELECT 1 FROM users WHERE id = ? AND username = ?
+                AND profileVersion = ? AND deletedAt IS NULL)
+    `).bind(target.id, target.id, target.id, username, target.version + 1);
+    const clearReplyMentions = env.DB.prepare(`
+        UPDATE replies SET mentions = COALESCE((SELECT json_group_array(json(reference.value))
+            FROM json_each(replies.mentions) AS reference
+            WHERE json_extract(reference.value, '$.userId') != ?), '[]')
+        WHERE EXISTS (SELECT 1 FROM json_each(replies.mentions) AS reference
+            WHERE json_extract(reference.value, '$.userId') = ?)
+            AND EXISTS (SELECT 1 FROM users WHERE id = ? AND username = ?
+                AND profileVersion = ? AND deletedAt IS NULL)
+    `).bind(target.id, target.id, target.id, username, target.version + 1);
     env.signal?.throwIfAborted();
-    const [updated] = await env.DB.batch<ManagedUser>([changed, audit]);
+    const statements = username === target.username
+        ? [changed, audit]
+        : [changed, audit, clearIssueMentions, clearReplyMentions];
+    const [updated] = await env.DB.batch<ManagedUser>(statements);
     if (!updated.meta.changes) throw new HttpError(409, "用户资料或管理员权限已变化，或用户名已存在，请重新读取后编辑。");
     return Response.json({ user: updated.results[0] });
 }
