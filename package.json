@@ -5,7 +5,7 @@
     "version": "0.0.0",
     "type": "module",
     "engines": {
-        "node": ">=22.12.0"
+        "node": ">=24.18.0"
     },
     "scripts": {
         "dev": "vite",
@@ -13,7 +13,8 @@
         "check:static": "tsc -p tsconfig.json",
         "check:worker": "tsc -p tsconfig.worker.json",
         "check": "npm run check:static && npm run check:worker",
-        "build": "npm run check && vite build",
+        "build": "npm run check && vite build && npm run calc",
+        "calc": "node calc.js",
         "deploy": "wrangler deploy && npm run migrate:remote && npm run retention:remote",
         "migrate": "wrangler d1 migrations apply DB --local",
         "migrate:remote": "wrangler d1 migrations apply DB --remote",
