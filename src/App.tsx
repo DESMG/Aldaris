@@ -1,4 +1,4 @@
-import { StrictMode, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, StrictMode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Avatar, Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Divider, GlobalStyles, IconButton, LinearProgress, Menu, MenuItem, Snackbar, Stack, Typography } from "@mui/material";
 import Container from "@mui/material/Container";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -14,11 +14,12 @@ import ConfirmDialog, { cancelConfirmation, confirmAction } from "./ConfirmDialo
 import AuthPage from "./AuthPage";
 import Issues from "./Issues";
 import IssueDetail from "./IssueDetail";
-import LicensePage from "./LicensePage";
-import OperationEvents from "./OperationEvents";
-import PolicyPage from "./PolicyPage";
-import Users from "./Users";
 import WrappingRow from "./WrappingRow";
+
+const LicensePage = lazy(() => import("./LicensePage"));
+const OperationEvents = lazy(() => import("./OperationEvents"));
+const PolicyPage = lazy(() => import("./PolicyPage"));
+const Users = lazy(() => import("./Users"));
 
 const slogans = [
     "若任由他将黑暗圣堂武士被玷污的影响带回艾尔，一切都将万劫不复。我们会找到他，并将他带回接受审判。",
@@ -314,13 +315,15 @@ export default function App() {
                         </Box>}
                         {loading && <LinearProgress aria-label="读取登录状态" />}
                         {error && <Alert severity="error" action={<Button color="inherit" onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{error}</Alert>}
-                        {pathname === "/license" ? <LicensePage /> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className={isIssueDetail || isIssueList ? undefined : "page-content"} sx={isIssueList ? { "& .MuiPaper-outlined, & .MuiAlert-root": { animation: "none" } } : undefined} data-issue-detail={isIssueDetail} ref={attachPageContent}>{pathname === "/" ? <Issues user={pageUser} locationSearch={locationSearch} />
-                            : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
-                                : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
-                                    : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
-                                        : pathname === "/login" || pathname === "/account" || pathname === "/admin/users/new"
-                                            ? <AuthPage key={pathname} mode={pathname === "/admin/users/new" ? "create-user" : pathname.slice(1) as "login" | "account"} user={pageUser} onUserChange={handleUserChange} />
-                                            : <Typography component="h1" variant="h5">页面不存在。</Typography>}</Box>}
+                        <Suspense fallback={<LinearProgress aria-label="读取页面" />}>
+                            {pathname === "/license" ? <LicensePage /> : pathname === "/privacy" || pathname === "/terms" ? <PolicyPage kind={pathname === "/privacy" ? "privacy" : "terms"} /> : !loading && (pageUser || pathname === "/login") && <Box key={`${pageUser?.id}:${pageUser?.role}:${pathname}:${pageVersion}`} className={isIssueDetail || isIssueList ? undefined : "page-content"} sx={isIssueList ? { "& .MuiPaper-outlined, & .MuiAlert-root": { animation: "none" } } : undefined} data-issue-detail={isIssueDetail} ref={attachPageContent}>{pathname === "/" ? <Issues user={pageUser} locationSearch={locationSearch} />
+                                : detail ? <IssueDetail key={detail[1]} id={Number(detail[1])} user={pageUser} replyTarget={replyTarget} />
+                                    : pathname === "/operations" && pageUser ? <OperationEvents user={pageUser} />
+                                        : pathname === "/admin/users" && pageUser ? <Users user={pageUser} onUserChange={handleUserChange} />
+                                            : pathname === "/login" || pathname === "/account" || pathname === "/admin/users/new"
+                                                ? <AuthPage key={pathname} mode={pathname === "/admin/users/new" ? "create-user" : pathname.slice(1) as "login" | "account"} user={pageUser} onUserChange={handleUserChange} />
+                                                : <Typography component="h1" variant="h5">页面不存在。</Typography>}</Box>}
+                        </Suspense>
                         <Stack component="footer" direction="row" spacing={1} useFlexGap sx={{
                             justifyContent: "center", flexWrap: "wrap", pt: 2,
                             "& a": {
