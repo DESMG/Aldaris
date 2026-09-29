@@ -18,6 +18,7 @@ import LicensePage from "./LicensePage";
 import OperationEvents from "./OperationEvents";
 import PolicyPage from "./PolicyPage";
 import Users from "./Users";
+import WrappingRow from "./WrappingRow";
 
 const slogans = [
     "若任由他将黑暗圣堂武士被玷污的影响带回艾尔，一切都将万劫不复。我们会找到他，并将他带回接受审判。",
@@ -261,12 +262,12 @@ export default function App() {
                 }}>
                     <Stack spacing={3} sx={{ width: "100%", ...(pathname === "/login" ? { maxWidth: 440 } : {}) }}>
                         {pathname !== "/login" && <Box component="header" sx={{ p: { xs: 2.5, sm: 3.5 }, borderRadius: "8px", bgcolor: "var(--surface-muted)", border: "1px solid", borderColor: "divider" }}>
-                            <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-                                <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                            <WrappingRow justifyContent="space-between">
+                                <WrappingRow>
                                     <Typography component="a" href="/#/" variant="h4" sx={{ color: "text.primary", textDecoration: "none" }}>问题管理系统</Typography>
                                     {pathname !== "/" && <Button href={`/#${window.history.state?.issueList?.path ?? "/"}`} color="inherit" variant="outlined">← 返回列表</Button>}
-                                </Stack>
-                                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                                </WrappingRow>
+                                <WrappingRow spacing={1}>
                                     <ThemeToggle />
                                     {user ? <>
                                         <IconButton id="account-button" aria-label="账户菜单" title={user.name} aria-controls={accountAnchor ? "account-menu" : undefined} aria-haspopup="true" aria-expanded={accountAnchor ? "true" : undefined} onClick={event => setAccountAnchor(event.currentTarget)}>
@@ -305,8 +306,8 @@ export default function App() {
                                     </> : !loading && <>
                                         <Button color="inherit" href={`/#/login?next=${encodeURIComponent(path)}`}>登录</Button>
                                     </>}
-                                </Stack>
-                            </Stack>
+                                </WrappingRow>
+                            </WrappingRow>
                             <Typography variant="caption" component="p" color="text.secondary" sx={{ mt: 2.5, mb: 0, pt: 2, borderTop: "1px solid", borderColor: "divider", lineHeight: 1.8 }}>
                                 {slogans[sloganIndex]}
                             </Typography>

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Alert, Button, Paper, Stack, Typography } from "@mui/material";
+import { Alert, Button, Stack, Typography } from "@mui/material";
 import { api, ApiError, assertApiSession, getApiSessionGeneration } from "./api";
 import type { Assignee, Issue } from "./api";
 import { assignmentAccountRoles, assignmentLabels, assignmentRoles } from "../shared/assignments";
@@ -7,6 +7,7 @@ import { ASSIGNEE_MAX_COUNT } from "../shared/limits";
 import UserPicker from "./UserPicker";
 import { useDraftGuard } from "./DraftGuard";
 import { confirmAction } from "./ConfirmDialog";
+import VersionConflictPanel from "./VersionConflictPanel";
 
 export default function AssigneeEditor({ issue, onSaved, onCancel, saving, onSavingChange }: {
     issue: Issue;
@@ -28,20 +29,32 @@ export default function AssigneeEditor({ issue, onSaved, onCancel, saving, onSav
     const selectedIds = [...new Set(assignees.map(member => member.id))];
     return <Stack spacing={1}>
         {error && <Alert severity="error">{error}</Alert>}
-        {conflict && <Alert severity="warning" action={<Button disabled={saving} color="inherit" onClick={async () => {
-            onSavingChange(true);
-            try {
-                const response = await api(`/api/issues/${issue.id}`);
-                const data: { issue: Issue } = await response.json();
-                setLatest(data.issue);
-            } catch (error) { setError(`重新读取负责人失败：${String(error)}`); }
-            finally { onSavingChange(false); }
-        }}>载入最新版本</Button>}>负责人已被更新，你的选择仍保留。请比较最新指派后再次保存。</Alert>}
-        {latest && <Paper variant="outlined" sx={{ p: 1.5 }}><Stack spacing={1}>
-            <Typography variant="subtitle2">服务器最新指派</Typography>
-            {assignmentRoles.map(role => <Typography key={role} variant="body2">{assignmentLabels[role]}：{latest.assignees.filter(member => member.role === role).map(member => `@${member.username}`).join("、") || "未指派"}</Typography>)}
-            <Button disabled={saving} onClick={() => { setVersion(latest.assignmentVersion); setConflict(false); setLatest(null); setError(""); }}>保留我的选择并使用此版本</Button>
-        </Stack></Paper>}
+        <VersionConflictPanel
+            conflict={conflict}
+            conflictMessage="负责人已被更新，你的选择仍保留。请比较最新指派后再次保存。"
+            loading={saving}
+            onLoad={async () => {
+                onSavingChange(true);
+                try {
+                    const response = await api(`/api/issues/${issue.id}`);
+                    const data: { issue: Issue } = await response.json();
+                    setLatest(data.issue);
+                } catch (error) { setError(`重新读取负责人失败：${String(error)}`); }
+                finally { onSavingChange(false); }
+            }}
+            latest={latest !== null}
+            title="服务器最新指派"
+            acceptLabel="保留我的选择并使用此版本"
+            acceptDisabled={saving}
+            onAccept={() => {
+                if (!latest) return;
+                setVersion(latest.assignmentVersion);
+                setConflict(false);
+                setLatest(null);
+                setError("");
+            }}>
+            {latest && assignmentRoles.map(role => <Typography key={role} variant="body2">{assignmentLabels[role]}：{latest.assignees.filter(member => member.role === role).map(member => `@${member.username}`).join("、") || "未指派"}</Typography>)}
+        </VersionConflictPanel>
         <Typography variant="body2">已指派 {selectedIds.length}/{ASSIGNEE_MAX_COUNT} 人，同一人兼任产品和开发只计一次。</Typography>
         {assignmentRoles.map(role => <UserPicker key={role} label={assignmentLabels[role]} value={assignees.filter(member => member.role === role)} accountRole={assignmentAccountRoles[role]} selectedIds={selectedIds}
             onChange={members => {

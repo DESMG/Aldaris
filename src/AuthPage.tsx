@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
 import { api, navigate, setLoginSession, getApiSessionGeneration, assertApiSession } from "./api";
 import type { LoginSession, User } from "./api";
-import PasswordStrength from "./PasswordStrength";
 import { isPasswordBreached } from "./passwordBreach";
 import { confirmAction } from "./ConfirmDialog";
 import { useDraftGuard } from "./DraftGuard";
-import { NAME_MAX_LENGTH, USERNAME_MAX_LENGTH } from "../shared/limits";
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, USERNAME_MAX_LENGTH } from "../shared/limits";
 import { useTextDraft } from "./useTextDraft";
+import NewPasswordFields from "./NewPasswordFields";
+import UserIdentityFields from "./UserIdentityFields";
+import WrappingRow from "./WrappingRow";
 
 export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
     mode: "login" | "create-user" | "account";
@@ -20,6 +22,7 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
     const [saving, setSaving] = useState(false);
     const [success, setSuccess] = useState("");
     const [strengthPassword, setStrengthPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
     const [dirty, setDirty] = useState(false);
     const [role, setRole] = useState<User["role"]>("user");
     const draft = useTextDraft(mode === "create-user" ? "create-user" : null, { name: "", username: "" }, value =>
@@ -87,6 +90,7 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
                     form.reset();
                     setRole("user");
                     setStrengthPassword("");
+                    setConfirmPassword("");
                     setDirty(false);
                     clearGuard();
                     return;
@@ -102,23 +106,30 @@ export default function AuthPage({ mode, user, onUserChange, resumeUserId }: {
             }
         }}>
             <Stack spacing={2}>
-                <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+                <WrappingRow>
                     <Typography component="h1" variant="h5">{title}</Typography>
                     {mode === "create-user" && <Button href="/#/admin/users" color="inherit" variant="outlined" disabled={saving}>← 返回用户管理</Button>}
-                </Stack>
+                </WrappingRow>
                 {mode === "login" && params.has("passwordChanged") && <Alert severity="success">密码已修改，请重新登录。</Alert>}
                 {error && <Alert severity="error">{error}</Alert>}
                 {draft.error && <Alert severity="error">{draft.error}</Alert>}
                 {success && <Alert severity="success">{success}</Alert>}
-                {mode === "create-user" && <TextField name="name" label="昵称" autoComplete="off" value={draft.value.name} onChange={event => { draft.setValue({ ...draft.value, name: event.target.value }); event.target.setCustomValidity(Array.from(event.target.value).length > NAME_MAX_LENGTH ? "昵称最多 32 个字符。" : ""); }} required disabled={saving} slotProps={{ htmlInput: { maxLength: NAME_MAX_LENGTH * 2 } }} helperText="中文真实姓名；重名用数字或减号加部门名区分，最多 32 字符" />}
-                {mode !== "account" && <TextField name="username" label="用户名" autoComplete="username" value={draft.value.username} onChange={event => draft.setValue({ ...draft.value, username: event.target.value })} required disabled={saving} slotProps={{ htmlInput: { maxLength: USERNAME_MAX_LENGTH, pattern: "[A-Za-z]+[0-9]*" } }} helperText={mode === "login" ? undefined : "本人姓名的英文拼音，重名在末尾加数字，最多 32 字符"} />}
+                {mode === "create-user" && <UserIdentityFields value={draft.value} onChange={draft.setValue} disabled={saving} nameAutoComplete="off" usernameAutoComplete="username" />}
+                {mode === "login" && <TextField name="username" label="用户名" autoComplete="username" value={draft.value.username} onChange={event => draft.setValue({ ...draft.value, username: event.target.value })} required disabled={saving} slotProps={{ htmlInput: { maxLength: USERNAME_MAX_LENGTH, pattern: "[A-Za-z]+[0-9]*" } }} />}
                 {mode === "create-user" && <Typography variant="caption" color="text.secondary">用户名和昵称在本标签页自动保存；密码需重新填写。</Typography>}
                 {mode === "create-user" && <TextField select name="role" label="账户角色" value={role} onChange={event => { setRole(event.target.value as User["role"]); setDirty(true); }} disabled={saving} helperText="产品、开发使用管理员；测试、投放使用用户。"><MenuItem value="user">用户</MenuItem><MenuItem value="admin">管理员</MenuItem></TextField>}
-                <TextField name="password" onChange={event => { if (mode !== "account") setStrengthPassword(event.target.value); }} label={mode === "account" ? "当前密码" : "密码"} type="password" autoComplete={mode === "create-user" ? "new-password" : "current-password"} required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} />
-                {mode === "account" && <TextField name="newPassword" onChange={event => setStrengthPassword(event.target.value)} label="新密码" type="password" autoComplete="new-password" required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} />}
-                {mode !== "login" && <TextField name="confirmPassword" label="确认密码" type="password" autoComplete="new-password" required disabled={saving} slotProps={{ htmlInput: { minLength: 6, maxLength: 128 } }} />}
-                {mode !== "login" && <Typography variant="caption" color="text.secondary">密码长度为 6–128 个字符</Typography>}
-                {mode !== "login" && <PasswordStrength password={strengthPassword} />}
+                {mode !== "create-user" && <TextField name="password" label={mode === "account" ? "当前密码" : "密码"} type="password" autoComplete="current-password" required disabled={saving} slotProps={{ htmlInput: { minLength: PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH } }} />}
+                {mode !== "login" && <NewPasswordFields
+                    passwordName={mode === "account" ? "newPassword" : "password"}
+                    passwordLabel={mode === "account" ? "新密码" : "密码"}
+                    confirmLabel="确认密码"
+                    password={strengthPassword}
+                    confirmPassword={confirmPassword}
+                    onPasswordChange={setStrengthPassword}
+                    onConfirmPasswordChange={setConfirmPassword}
+                    disabled={saving}
+                    required
+                />}
                 <Button type="submit" variant="contained" disabled={saving}>{saving ? "处理中…" : mode === "account" ? "修改密码" : title}</Button>
             </Stack>
         </Box>

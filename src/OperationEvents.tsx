@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Alert, Button, LinearProgress, Paper, Stack, Typography } from "@mui/material";
 import { api } from "./api";
 import type { OperationEvent, User } from "../shared/types";
+import { issuePriorityLabel } from "./IssuePriorityChip";
+import WrappingRow from "./WrappingRow";
 
 const labels: Record<OperationEvent["action"], string> = {
     user_created: "创建账户", user_updated: "编辑账户", user_deleted: "删除账户", password_reset: "重置密码",
@@ -33,7 +35,7 @@ function describe(event: OperationEvent) {
         case "reply_edited": return [`工单：#${event.details.issueId}`, `评论：#${event.details.replyId}`];
         case "reply_deleted": return [`工单：#${event.details.issueId}`, `评论：#${event.details.replyId}`];
         case "issue_status": return [`工单：#${event.details.issueId}`, `状态：${event.details.value === "Open" ? "打开" : "已关闭"}`];
-        case "issue_priority": return [`工单：#${event.details.issueId}`, `优先级：${{ Low: "低", Medium: "中", High: "高" }[event.details.value]}`];
+        case "issue_priority": return [`工单：#${event.details.issueId}`, `优先级：${issuePriorityLabel(event.details.value)}`];
         case "issue_assignees": return [`工单：#${event.details.issueId}`];
     }
     event satisfies never;
@@ -63,10 +65,10 @@ export default function OperationEvents({ user }: { user: User }) {
     }, [before, refresh, user.role]);
     if (user.role !== "admin") return <Alert severity="error">只有管理员可以查看操作记录。</Alert>;
     return <Stack spacing={2}>
-        <Stack direction="row" spacing={2} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+        <WrappingRow>
             <Typography variant="h5" component="h1">操作记录</Typography>
             <Button sx={{ ml: "auto" }} disabled={loading} onClick={() => { setBefore(null); setRefresh(value => value + 1); }}>刷新</Button>
-        </Stack>
+        </WrappingRow>
         {error && <Alert severity="error" action={<Button onClick={() => setRefresh(value => value + 1)}>重试</Button>}>{error}</Alert>}
         {loading && <LinearProgress />}
         {!loading && !error && events.length === 0 && <Typography>暂无操作记录。</Typography>}

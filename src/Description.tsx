@@ -6,6 +6,7 @@ import type { Member } from "./api";
 import ImageSelection from "./ImageSelection";
 import { DESCRIPTION_MAX_LENGTH } from "../shared/limits";
 import { textLinks } from "../shared/links";
+import { USER_POPUP_MAX_HEIGHT, userPopupModifiers, userPopupPlacement, userPopupSx } from "./userPopup";
 
 export default function Description({ label, value, onChange, images, onImagesChange, disabled, retainedCount, onProcessingChange }: {
     label: string;
@@ -156,10 +157,10 @@ export default function Description({ label, value, onChange, images, onImagesCh
                 if (pasted.length > 0) { event.preventDefault(); setPastedFiles(pasted); }
             }}
         />
-        {search !== null && <Popper open={anchor !== null} anchorEl={anchor} placement="bottom-start"
-            sx={{ zIndex: theme => theme.zIndex.modal + 1 }}
-            modifiers={[{ name: "offset", options: { offset: [0, 4] } }, { name: "preventOverflow", options: { padding: 8 } }]}>
-            <Paper ref={popup} variant="outlined" sx={{ p: 1, width: 300, maxWidth: "calc(100vw - 16px)", boxSizing: "border-box", maxHeight: 220, overflow: "auto", bgcolor: "var(--surface-overlay)", boxShadow: "var(--overlay-shadow)" }}>
+        {search !== null && <Popper open={anchor !== null} anchorEl={anchor} placement={userPopupPlacement}
+            sx={userPopupSx}
+            modifiers={userPopupModifiers}>
+            <Paper ref={popup} variant="outlined" sx={{ p: 1, width: 300, maxWidth: "calc(100vw - 16px)", boxSizing: "border-box", maxHeight: USER_POPUP_MAX_HEIGHT, overflow: "auto", bgcolor: "var(--surface-overlay)", boxShadow: "var(--overlay-shadow)" }}>
                 {error && <Alert severity="error">{error}</Alert>}
                 {loading && <Typography variant="body2">正在查找用户…</Typography>}
                 {!loading && !error && users.length === 0 && <Typography variant="body2">没有匹配的用户。</Typography>}

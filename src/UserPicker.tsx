@@ -3,6 +3,7 @@ import { Autocomplete, TextField } from "@mui/material";
 import { cachedJson, getCachedJson } from "./api";
 import type { Member } from "./api";
 import { ASSIGNEE_MAX_COUNT } from "../shared/limits";
+import { USER_POPUP_MAX_HEIGHT, userPopupModifiers, userPopupPlacement, userPopupSx } from "./userPopup";
 
 export default function UserPicker({ label, value, onChange, disabled, accountRole, selectedIds }: {
     label: string;
@@ -54,11 +55,11 @@ export default function UserPicker({ label, value, onChange, disabled, accountRo
         noOptionsText={error || (canSearch ? "没有匹配的用户" : "请输入用户名搜索")} loadingText="正在读取用户…"
         slotProps={{
             popper: {
-                placement: "bottom-start",
-                sx: { zIndex: theme => theme.zIndex.modal + 1 },
-                modifiers: [{ name: "offset", options: { offset: [0, 4] } }, { name: "preventOverflow", options: { padding: 8 } }],
+                placement: userPopupPlacement,
+                sx: userPopupSx,
+                modifiers: userPopupModifiers,
             },
-            listbox: { sx: { maxHeight: 220 } },
+            listbox: { sx: { maxHeight: USER_POPUP_MAX_HEIGHT } },
         }}
         renderInput={params => <TextField {...params} label={label} error={!!error} helperText={error || `搜索${accountRole === "admin" ? "管理员" : "普通用户"}；整个工单最多 ${ASSIGNEE_MAX_COUNT} 人，可兼任同类角色`} />} />;
 }

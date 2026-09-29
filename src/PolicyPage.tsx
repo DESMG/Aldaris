@@ -1,8 +1,8 @@
-import { Alert, Box, Button, Link, Paper, Stack, Typography } from "@mui/material";
+import { Alert, Link, Typography } from "@mui/material";
+import DocumentPage from "./DocumentPage";
 
 export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
-    return <Paper component="article" variant="outlined" sx={{ p: { xs: 2, sm: 4 }, overflowWrap: "anywhere" }}>
-        <Stack spacing={2} sx={{
+    return <DocumentPage title={kind === "privacy" ? "隐私政策" : "使用条款"} contentSx={{
             "& p": { lineHeight: 1.9 },
             "& h2": { pt: 2 },
             "& a": {
@@ -20,8 +20,7 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 },
             },
         }}>
-            <Typography variant="h4" component="h1">{kind === "privacy" ? "隐私政策" : "使用条款"}</Typography>
-            {kind === "privacy" ? <>
+        {kind === "privacy" ? <>
                 <Typography>本隐私政策说明 Aldaris 在提供团队工单协作服务时如何收集、使用、保存和共享信息，以及您可以如何管理相关数据。请在登录、提交内容或管理账户前阅读本政策，并同时阅读<Link href="/#/terms">使用条款</Link>。</Typography>
                 <Alert severity="warning">工单、评论和图片对同一部署内的已登录成员可见。图片保留 30 天，容量不足时可能提前清理。删除账户不会一并删除历史协作内容。请勿提交密码、访问凭据或不适合向全体成员公开的信息。</Alert>
 
@@ -139,10 +138,6 @@ export default function PolicyPage({ kind }: { kind: "privacy" | "terms" }) {
                 <Typography component="h2" variant="h6">十二、条款更新与联系</Typography>
                 <Typography>服务范围和使用规则变化时，本条款应相应更新。涉及共享范围、数据处理或重要权益的变化，运营者应通过团队渠道说明，并在需要时取得必要确认；不得仅以条款更新排除法定权利。</Typography>
                 <Typography>如对条款、账户、内容权限或维护有疑问，请通过取得账户时使用的团队渠道联系管理员，必要时要求转交运营者。提供说明时请勿附带密码或完整登录凭据。</Typography>
-            </>}
-        </Stack>
-        <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-            <Button href="/#/" variant="contained">我已知晓</Button>
-        </Box>
-    </Paper>;
+        </>}
+    </DocumentPage>;
 }

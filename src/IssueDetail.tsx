@@ -7,6 +7,8 @@ import { EditReplyForm, ReplyForm } from "./ReplyForms";
 import AssigneeEditor from "./AssigneeEditor";
 import useIssueTimeline from "./useIssueTimeline";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
+import IssuePriorityChip, { issuePriorityLabel } from "./IssuePriorityChip";
+import IssueStatusChip from "./IssueStatusChip";
 
 const priorityRank: Record<Issue["priority"], number> = { Low: 0, Medium: 1, High: 2 };
 
@@ -121,7 +123,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
         {loadError && <Alert severity="error" action={<Button color="inherit" disabled={editing !== null} onClick={() => setRefresh((value) => value + 1)}>重试</Button>}>{loadError}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
         {issueConflict && <Alert severity="warning" action={<Button color="inherit" disabled={saving || editing !== null || detailLoading || !!detailError} onClick={() => void updateIssue(issueConflict.field, issueConflict.value, issueConflict.stateReason)}>按最新版本重试</Button>}>
-            保留的操作：{issueConflict.field === "priority" ? `加急至 ${{ Low: "低", Medium: "中", High: "高" }[issueConflict.value as Issue["priority"]]}优先级` : issueConflict.value === "Open" ? "重新打开工单" : issueConflict.stateReason === "completed" ? "关闭为已完成" : "关闭为不计划处理"}。请比较当前工单属性后提交。
+            保留的操作：{issueConflict.field === "priority" ? `加急至 ${issuePriorityLabel(issueConflict.value as Issue["priority"])}优先级` : issueConflict.value === "Open" ? "重新打开工单" : issueConflict.stateReason === "completed" ? "关闭为已完成" : "关闭为不计划处理"}。请比较当前工单属性后提交。
         </Alert>}
         {targetUnavailable && <Alert severity="warning">定位的评论已删除或不可用。</Alert>}
         {issue &&
@@ -130,7 +132,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                     <Stack spacing={1}>
                         <Typography component="h1" variant="h5" sx={{ overflowWrap: "anywhere" }}>{issue.title} <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>#{issue.id}</Box></Typography>
                         <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                            <Chip label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
+                            <IssueStatusChip status={issue.status} stateReason={issue.stateReason} />
                             <Typography variant="body2" color="text.secondary">{issue.authorName} 创建了此工单</Typography>
                         </Stack>
                     </Stack>
@@ -139,7 +141,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                         "&::before": { content: '\'\'', position: "absolute", top: 0, bottom: 0, left: 32, width: 2, bgcolor: "divider" },
                         "& > *": { position: "relative" },
                     }}>
-                        <Card variant="outlined" sx={{ boxShadow: "none", borderRadius: 1 }}>
+                        <Card variant="outlined">
                             <CardHeader avatar={<Avatar>{issue.authorName.slice(0, 1)}</Avatar>} title={issue.authorName} subheader={new Date(issue.createdAt).toLocaleString("sv-SE")} sx={{ bgcolor: "var(--surface-muted)" }} />
                             <Divider />
                             <CardContent><Content description={issue.description} images={issue.images} clearedImages={issue.clearedImages} mentions={issue.mentions} /></CardContent>
@@ -159,8 +161,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                     <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
                                         <Box component="span" sx={{ fontWeight: 700 }}>{reply.actorName}</Box>{" "}
                                         {reply.kind === "status" ? (reply.details.after === "Open" ? "重新打开了工单" : (reply.details.before === "Closed" ? "更改了关闭原因 (" : "关闭了工单 (") + (reply.details.stateReason === "completed" ? "已完成" : "已关闭") + ")")
-                                            : reply.kind === "priority" ? <>加急了工单，当前优先级 <Chip component="span" size="small" variant="outlined" label={{ Low: "低", Medium: "中", High: "高" }[reply.details.after]}
-                                                color={reply.details.after === "High" ? "error" : reply.details.after === "Medium" ? "warning" : "info"} /></>
+                                            : reply.kind === "priority" ? <>加急了工单，当前优先级 <IssuePriorityChip priority={reply.details.after} size="small" compact inline /></>
                                                 : reply.kind === "assignment" ? "更新了负责人"
                                                     : reply.kind === "reply_edited" ? "编辑了评论 #" + reply.details.replyId : "删除了评论 #" + reply.details.replyId}
                                     </Typography>
@@ -174,7 +175,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                     })}
                                     <Typography component="time" dateTime={reply.createdAt} variant="caption" color="text.secondary">{new Date(reply.createdAt).toLocaleString("sv-SE")}</Typography>
                                 </Stack>
-                            </Stack> : <Card id={"reply-" + reply.id} variant="outlined" sx={{ boxShadow: "none", borderRadius: 1, borderColor: String(reply.id) === target ? "primary.main" : "divider" }}>
+                            </Stack> : <Card id={"reply-" + reply.id} variant="outlined" sx={{ borderColor: String(reply.id) === target ? "primary.main" : "divider" }}>
                                 <CardHeader avatar={<Avatar>{reply.authorName.slice(0, 1)}</Avatar>} title={reply.authorName} subheader={new Date(reply.createdAt).toLocaleString("sv-SE")}
                                     action={<Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                                         {reply.authorId === issue.authorId && <Chip label="作者" size="small" variant="outlined" />}
@@ -275,7 +276,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                     <Stack spacing={2}>
                         <Typography component="h2" variant="h6">问题属性</Typography>
                         <Typography variant="body2" color="text.secondary">状态</Typography>
-                        <Box><Chip label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} /></Box>
+                        <Box><IssueStatusChip status={issue.status} stateReason={issue.stateReason} /></Box>
                         <Divider />
                         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                             <Typography variant="body2" color="text.secondary">优先级</Typography>
@@ -283,7 +284,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                 加急
                             </Button>}
                         </Stack>
-                        <Box><Chip variant="outlined" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} /></Box>
+                        <Box><IssuePriorityChip priority={issue.priority} /></Box>
                         <Stack direction="row" sx={{ alignItems: "center", justifyContent: "space-between" }}>
                             <Typography variant="body2" color="text.secondary">负责人</Typography>
                             {canEdit && !editingAssignee && <Button variant="text" disabled={saving || editing !== null} onClick={() => {

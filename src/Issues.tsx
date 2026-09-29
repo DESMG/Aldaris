@@ -8,6 +8,9 @@ import { cachedJson, getCachedJson, navigate } from "./api";
 import type { IssueListContext, IssueSummary, User } from "./api";
 import CreateIssueDialog from "./CreateIssueDialog";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
+import IssuePriorityChip from "./IssuePriorityChip";
+import IssueStatusChip from "./IssueStatusChip";
+import WrappingRow from "./WrappingRow";
 
 type IssuesView = { status: "Open" | "Closed"; page: number };
 function readView(): IssuesView {
@@ -17,6 +20,11 @@ function readView(): IssuesView {
     return { status: params.get("status") === "Closed" ? "Closed" : "Open", page: Number.isSafeInteger(page) && page > 0 ? page : 1 };
 }
 type IssuesData = { issues: IssueSummary[]; counts: { Open: number; Closed: number } };
+const multilineChipSx = {
+    height: "auto",
+    minHeight: 24,
+    "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 },
+} as const;
 
 export default function Issues({ user, locationSearch }: { user: User | null; locationSearch: string }) {
     const [view, setView] = useState(readView);
@@ -151,7 +159,7 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
 
                 <Stack spacing={2}>
                     {issues.map((issue) => (
-                        <Paper component="a" id={`issue-${issue.id}`} href={`/#/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", boxShadow: "none", borderRadius: 1, p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
+                        <Paper component="a" id={`issue-${issue.id}`} href={`/#/issues/${issue.id}`} key={issue.id} variant="outlined" sx={{ display: "block", color: "text.primary", textDecoration: "none", p: { xs: 2, sm: 2.5 }, "&:hover, &:focus-visible": { bgcolor: "action.hover" }, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 4 } }}>
                             <Stack spacing={2}>
                                 <Typography
                                     title={`#${issue.id} ${issue.title}`}
@@ -159,10 +167,10 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
                                 >
                                     <Box component="span" sx={{ color: "text.secondary", fontWeight: 400, mr: 1.5 }}>#{issue.id}</Box>{issue.title}
                                 </Typography>
-                                <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                                    <Chip size="small" label={issue.status === "Open" ? "打开" : issue.stateReason === "completed" ? "已完成" : "已关闭"} color={issue.status === "Open" ? "success" : issue.stateReason === "completed" ? "secondary" : "default"} sx={{ "&.MuiChip-colorDefault": { bgcolor: "var(--neutral-bg)", color: "common.white" } }} />
-                                    <Chip size="small" label={`${{ Low: "低", Medium: "中", High: "高" }[issue.priority]}优先级`} color={issue.priority === "High" ? "error" : issue.priority === "Medium" ? "warning" : "info"} variant="outlined" />
-                                    <Chip size="small" label={`创建人：${issue.authorName}`} sx={{ height: "auto", minHeight: 24, "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 } }} />
+                                <WrappingRow spacing={1}>
+                                    <IssueStatusChip size="small" status={issue.status} stateReason={issue.stateReason} />
+                                    <IssuePriorityChip size="small" priority={issue.priority} />
+                                    <Chip size="small" label={`创建人：${issue.authorName}`} sx={multilineChipSx} />
                                     {assignmentRoles.flatMap(role => issue.assignees.filter(member => member.role === role).map(member => (
                                         <Chip key={`${role}-${member.id}`} size="small" label={<>
                                             {`${assignmentLabels[role]}：${member.name}`}
@@ -190,15 +198,14 @@ export default function Issues({ user, locationSearch }: { user: User | null; lo
                                         </>}
                                             title={member.id === user?.id ? "你是此工单的关系人" : undefined}
                                             sx={{
-                                                height: "auto", minHeight: 24,
-                                                "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere", py: 0.5 },
+                                                ...multilineChipSx,
                                                 ...(member.id === user?.id && {
                                                     position: "relative", overflow: "hidden",
                                                 }),
                                             }} />
                                     )))}
                                     <Typography variant="caption" color="text.secondary" sx={{ ml: { sm: "auto" }, width: { xs: "100%", sm: "auto" } }}>{new Date(issue.createdAt).toLocaleString("sv-SE")}</Typography>
-                                </Stack>
+                                </WrappingRow>
                             </Stack>
                         </Paper>
                     ))}

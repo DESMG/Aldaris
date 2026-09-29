@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Alert, Box, Button, Paper, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, Stack, Typography } from "@mui/material";
 import { api, ApiError } from "./api";
 import type { Reply } from "./api";
 import Content from "./IssueContent";
@@ -8,6 +8,7 @@ import Description from "./Description";
 import { useDraftGuard } from "./DraftGuard";
 import { confirmAction } from "./ConfirmDialog";
 import { useTextDraft } from "./useTextDraft";
+import VersionConflictPanel from "./VersionConflictPanel";
 
 export function ReplyForm({ issueId, saving, blocked, editing, onReply, onStatus, children }: {
     issueId: number;
@@ -110,27 +111,36 @@ export function EditReplyForm({ reply, saving, onSave, onCancel }: {
         <Stack spacing={2}>
             {error && <Alert severity="error">{error}</Alert>}
             {draft.error && <Alert severity="error">{draft.error}</Alert>}
-            {conflict && <Alert severity="warning" action={<Button color="inherit" disabled={reloading} onClick={async () => {
-                setReloading(true);
-                try {
-                    const response = await api(`/api/replies/${reply.id}`);
-                    const data: { reply: Reply } = await response.json();
-                    setLatest(data.reply);
-                } catch (error) { setError(`重新读取评论失败：${String(error)}`); }
-                finally { setReloading(false); }
-            }}>载入最新版本</Button>}>这条评论已被更新。你的草稿仍在下方，请先载入最新内容进行比较。</Alert>}
-            {latest && <Paper variant="outlined" sx={{ p: 2 }}><Stack spacing={2}>
-                <Typography variant="subtitle2">服务器最新版本 (版本 {latest.version})</Typography>
-                <Content description={latest.description} images={latest.images} clearedImages={latest.clearedImages} mentions={latest.mentions} />
-                <Typography variant="body2">你的草稿将替换服务器最新内容，下方没有的服务器图片不会保留。服务器已删除的旧图片将从草稿移除，请核对后再保存。</Typography>
-                <Button disabled={saving || reloading} onClick={() => {
+            <VersionConflictPanel
+                conflict={conflict}
+                conflictMessage="这条评论已被更新。你的草稿仍在下方，请先载入最新内容进行比较。"
+                loading={reloading}
+                onLoad={async () => {
+                    setReloading(true);
+                    try {
+                        const response = await api(`/api/replies/${reply.id}`);
+                        const data: { reply: Reply } = await response.json();
+                        setLatest(data.reply);
+                    } catch (error) { setError(`重新读取评论失败：${String(error)}`); }
+                    finally { setReloading(false); }
+                }}
+                latest={latest !== null}
+                title={latest ? `服务器最新版本 (版本 ${latest.version})` : ""}
+                acceptLabel="保留草稿并使用此版本"
+                acceptDisabled={saving || reloading}
+                onAccept={() => {
+                    if (!latest) return;
                     draft.setValue({ description, version: latest.version, retainedImages: retainedImages.filter(key => latest.images.includes(key)) });
                     setClearedImages(latest.clearedImages);
                     setConflict(false);
                     setLatest(null);
                     setError("");
-                }}>保留草稿并使用此版本</Button>
-            </Stack></Paper>}
+                }}>
+                {latest && <>
+                    <Content description={latest.description} images={latest.images} clearedImages={latest.clearedImages} mentions={latest.mentions} />
+                    <Typography variant="body2">你的草稿将替换服务器最新内容，下方没有的服务器图片不会保留。服务器已删除的旧图片将从草稿移除，请核对后再保存。</Typography>
+                </>}
+            </VersionConflictPanel>
             <Description label="评论内容" value={description} onChange={value => draft.setValue({ ...draft.value, description: value })} images={images} onImagesChange={setImages} disabled={saving || reloading} retainedCount={retainedImages.length} onProcessingChange={setProcessing} />
             <Typography variant="caption" color="text.secondary">文字在本标签页自动保存；刷新后再次编辑即可恢复，未提交的图片需重新选择。</Typography>
             {retainedImages.map((key, index) => <Stack key={key} spacing={1}>
