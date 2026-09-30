@@ -1,5 +1,5 @@
 export type { User, Member, Assignee, Issue, IssueSummary, Reply, TimelineEntry, LoginSession } from "../shared/types";
-import type { LoginSession } from "../shared/types";
+import { LoginSession } from "../shared/types";
 import { confirmDraftNavigation, hasUnsavedDrafts } from "./DraftGuard";
 
 const jsonCache = new Map<string, { data: unknown; expiresAt: number }>();

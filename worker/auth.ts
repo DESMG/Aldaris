@@ -1,7 +1,7 @@
 import { hash, verifyPassword, newPassword, passwordValid } from "./password";
-import type { User } from "../shared/types";
+import { User } from "../shared/types";
 import { LOGIN_ATTEMPT_LIMIT, LOGIN_WINDOW_MS, USERNAME_MAX_LENGTH, USERNAME_PATTERN } from "../shared/limits";
-import type { Env } from "./env";
+import { Env } from "./env";
 import { issueToken } from "./jwt";
 import { HttpError, readForm } from "./input";
 import { adminUsers } from "./users";

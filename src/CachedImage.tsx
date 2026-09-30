@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Alert, Box, Button, Typography } from "@mui/material";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { SxProps, Theme } from "@mui/material/styles";
 import { ApiError, cachedImage, getApiSessionGeneration, subscribeApiSession } from "./api";
 
 export default function CachedImage({ src, alt, sx }: { src: string; alt: string; sx?: SxProps<Theme> }) {

@@ -4,8 +4,7 @@ import Container from "@mui/material/Container";
 import CssBaseline from "@mui/material/CssBaseline";
 import { ThemeProvider } from "@mui/material/styles";
 
-import { api, navigate, getLoginSession, setLoginSession, synchronizeSession, LOGIN_STORAGE_KEY, getApiSessionGeneration, assertApiSession } from "./api";
-import type { User } from "./api";
+import { api, navigate, getLoginSession, setLoginSession, synchronizeSession, LOGIN_STORAGE_KEY, getApiSessionGeneration, assertApiSession, User } from "./api";
 import theme from "./theme";
 import ThemeToggle from "./ThemeToggle";
 import { confirmDraftNavigation, discardDraftGuards, hasUnsavedDrafts } from "./DraftGuard";

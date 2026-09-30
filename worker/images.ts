@@ -1,7 +1,7 @@
 import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT } from "../shared/limits.ts";
 import { HttpError } from "../shared/http-error.ts";
 import { inspectImage } from "../shared/image-format.ts";
-import type { Env } from "./env";
+import { Env } from "./env";
 import { reclaimImageSpace, rollbackImages } from "./image-cleanup";
 export { inspectImage } from "../shared/image-format.ts";
 

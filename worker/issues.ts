@@ -1,5 +1,5 @@
-import type { Env } from "./env";
-import type { Issue, User } from "../shared/types";
+import { Env } from "./env";
+import { Issue, User } from "../shared/types";
 import { mentionCandidates } from "../shared/mentions";
 import { mentionDetails, mentionRecords } from "./mentions";
 import { assignmentAccountRoles, assignmentRoles } from "../shared/assignments";

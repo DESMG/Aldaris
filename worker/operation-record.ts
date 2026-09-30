@@ -1,4 +1,4 @@
-import type { OperationAction, User } from "../shared/types";
+import { OperationAction, User } from "../shared/types";
 
 // Place immediately after the mutation whose changes() result is being recorded.
 export function recordOperation(db: D1Database, actor: User, action: OperationAction, details: Record<string, string | number | boolean>) {

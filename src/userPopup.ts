@@ -1,5 +1,5 @@
-import type { PopperProps } from "@mui/material";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { PopperProps } from "@mui/material";
+import { SxProps, Theme } from "@mui/material/styles";
 
 export const userPopupPlacement: PopperProps["placement"] = "bottom-start";
 export const userPopupSx: SxProps<Theme> = { zIndex: theme => theme.zIndex.modal + 1 };

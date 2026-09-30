@@ -1,4 +1,4 @@
-import type { Env } from "./env";
+import { Env } from "./env";
 
 export async function deletePendingImages(env: Env) {
     env.signal?.throwIfAborted();

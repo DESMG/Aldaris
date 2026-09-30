@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
-import type { Env } from "./env";
-import type { User } from "../shared/types";
+import { Env } from "./env";
+import { User } from "../shared/types";
 import { HttpError } from "./input";
 
 type Claims = { sub: number; ver: number; sid: string; iss: string; aud: string; iat: number; exp: number };

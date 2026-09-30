@@ -1,8 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Alert, Button, Paper, Popper, Stack, TextField, Typography } from "@mui/material";
-import type { PopperProps } from "@mui/material";
-import { cachedJson, getCachedJson } from "./api";
-import type { Member } from "./api";
+import { Alert, Button, Paper, Popper, Stack, TextField, Typography, PopperProps } from "@mui/material";
+import { cachedJson, getCachedJson, Member } from "./api";
 import ImageSelection from "./ImageSelection";
 import { DESCRIPTION_MAX_LENGTH } from "../shared/limits";
 import { textLinks } from "../shared/links";

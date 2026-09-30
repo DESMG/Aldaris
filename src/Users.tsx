@@ -1,8 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Alert, Avatar, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Paper, Stack, Typography, useMediaQuery } from "@mui/material";
-import { api, ApiError, cachedJson, getCachedJson, navigate, getApiSessionGeneration, assertApiSession } from "./api";
-import type { User } from "./api";
-import type { ManagedUser } from "../shared/types";
+import { api, ApiError, cachedJson, getCachedJson, navigate, getApiSessionGeneration, assertApiSession, User } from "./api";
+import { ManagedUser } from "../shared/types";
 import { isPasswordBreached } from "./passwordBreach";
 import { confirmAction } from "./ConfirmDialog";
 import { useDraftGuard } from "./DraftGuard";

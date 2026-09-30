@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Alert, Avatar, Box, Button, ButtonGroup, Card, CardContent, CardHeader, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Menu, LinearProgress, MenuItem, Paper, Stack, Typography } from "@mui/material";
-import { api, ApiError, assertApiSession, cachedJson, clearApiCache, getApiSessionGeneration, getCachedJson } from "./api";
-import type { Issue, Reply, User } from "./api";
+import { api, ApiError, assertApiSession, cachedJson, clearApiCache, getApiSessionGeneration, getCachedJson, Issue, Reply, User } from "./api";
 import Content from "./IssueContent";
 import { EditReplyForm, ReplyForm } from "./ReplyForms";
 import AssigneeEditor from "./AssigneeEditor";

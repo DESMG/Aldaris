@@ -4,8 +4,7 @@ import {
     LinearProgress, Pagination, Paper, Stack, Tab, Tabs, Typography,
 } from "@mui/material";
 
-import { cachedJson, getCachedJson, navigate } from "./api";
-import type { IssueListContext, IssueSummary, User } from "./api";
+import { cachedJson, getCachedJson, navigate, IssueListContext, IssueSummary, User } from "./api";
 import CreateIssueDialog from "./CreateIssueDialog";
 import { assignmentLabels, assignmentRoles } from "../shared/assignments";
 import IssuePriorityChip from "./IssuePriorityChip";

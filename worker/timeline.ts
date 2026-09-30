@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
-import type { TimelineEntry } from "../shared/types";
-import type { Env } from "./env";
+import { TimelineEntry } from "../shared/types";
+import { Env } from "./env";
 import { HttpError } from "./input";
 import { mentionDetails } from "./mentions";
 

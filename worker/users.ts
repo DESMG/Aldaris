@@ -1,6 +1,6 @@
-import type { ManagedUser, OperationEvent, User } from "../shared/types";
+import { ManagedUser, OperationEvent, User } from "../shared/types";
 import { NAME_MAX_LENGTH, NAME_PATTERN, USERNAME_MAX_LENGTH, USERNAME_PATTERN } from "../shared/limits";
-import type { Env } from "./env";
+import { Env } from "./env";
 import { HttpError, readForm } from "./input";
 import { newPassword, passwordValid } from "./password";
 

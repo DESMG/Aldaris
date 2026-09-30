@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, LinearProgress, Paper, Stack, Typography } from "@mui/material";
 import { api } from "./api";
-import type { OperationEvent, User } from "../shared/types";
+import { OperationEvent, User } from "../shared/types";
 import { issuePriorityLabel } from "./IssuePriorityChip";
 import WrappingRow from "./WrappingRow";
 

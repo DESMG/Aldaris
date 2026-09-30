@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { ReactNode } from "react";
 import { Box, Button, Paper, Stack, Typography } from "@mui/material";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { SxProps, Theme } from "@mui/material/styles";
 
 export default function DocumentPage({ title, children, contentSx }: {
     title: string;

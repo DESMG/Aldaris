@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { ReactNode } from "react";
 import { Stack } from "@mui/material";
 
 export default function WrappingRow({ children, spacing = 2, justifyContent }: {

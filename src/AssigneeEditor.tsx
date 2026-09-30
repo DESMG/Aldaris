@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { Alert, Button, Stack, Typography } from "@mui/material";
-import { api, ApiError, assertApiSession, getApiSessionGeneration } from "./api";
-import type { Assignee, Issue } from "./api";
+import { api, ApiError, assertApiSession, getApiSessionGeneration, Assignee, Issue } from "./api";
 import { assignmentAccountRoles, assignmentLabels, assignmentRoles } from "../shared/assignments";
 import { ASSIGNEE_MAX_COUNT } from "../shared/limits";
 import UserPicker from "./UserPicker";

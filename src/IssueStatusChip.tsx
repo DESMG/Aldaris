@@ -1,6 +1,5 @@
-import { Chip } from "@mui/material";
-import type { ChipProps } from "@mui/material";
-import type { Issue } from "./api";
+import { Chip, ChipProps } from "@mui/material";
+import { Issue } from "./api";
 
 export default function IssueStatusChip({ status, stateReason, size }: {
     status: Issue["status"];

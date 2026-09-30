@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { ReactNode } from "react";
 import { Alert, Button, Paper, Stack, Typography } from "@mui/material";
 
 export default function VersionConflictPanel({ conflict, conflictMessage, loading, onLoad, latest, title, children, onAccept, acceptLabel, acceptDisabled = false }: {

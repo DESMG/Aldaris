@@ -1,4 +1,4 @@
-import type { AssignmentRole } from "./assignments";
+import { AssignmentRole } from "./assignments";
 
 export type User = { id: number; name: string; username: string; role: "user" | "admin" };
 export type ManagedUser = User & { version: number };

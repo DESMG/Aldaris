@@ -1,9 +1,8 @@
-import { useEffect } from "react";
-import type { ReactNode } from "react";
+import { useEffect, ReactNode } from "react";
 import { Box, Stack, Tooltip, Typography } from "@mui/material";
 import CachedImage from "./CachedImage";
 import ZoomableImage from "./ZoomableImage";
-import type { Mention } from "../shared/types";
+import { Mention } from "../shared/types";
 import { textLinks } from "../shared/links";
 import { forgetImage } from "./api";
 

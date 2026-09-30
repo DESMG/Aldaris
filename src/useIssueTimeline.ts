@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { cachedJson, getCachedJson } from "./api";
-import type { Reply, TimelineEntry } from "./api";
+import { cachedJson, getCachedJson, Reply, TimelineEntry } from "./api";
 
 type TimelineData = {
     entries: TimelineEntry[];

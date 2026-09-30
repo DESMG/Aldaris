@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
-import { api, navigate, setLoginSession, getApiSessionGeneration, assertApiSession } from "./api";
-import type { LoginSession, User } from "./api";
+import { api, navigate, setLoginSession, getApiSessionGeneration, assertApiSession, LoginSession, User } from "./api";
 import { isPasswordBreached } from "./passwordBreach";
 import { confirmAction } from "./ConfirmDialog";
 import { useDraftGuard } from "./DraftGuard";

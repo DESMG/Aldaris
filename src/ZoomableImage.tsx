@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, ReactNode } from "react";
 import { Box, Button, Modal, Stack, SvgIcon } from "@mui/material";
-import type { SxProps, Theme } from "@mui/material/styles";
+import { SxProps, Theme } from "@mui/material/styles";
 
 export default function ZoomableImage({ alt, thumbnailSx, renderImage }: {
     alt: string;

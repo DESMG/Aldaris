@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Autocomplete, TextField } from "@mui/material";
-import { cachedJson, getCachedJson } from "./api";
-import type { Member } from "./api";
+import { cachedJson, getCachedJson, Member } from "./api";
 import { ASSIGNEE_MAX_COUNT } from "../shared/limits";
 import { USER_POPUP_MAX_HEIGHT, userPopupModifiers, userPopupPlacement, userPopupSx } from "./userPopup";
 

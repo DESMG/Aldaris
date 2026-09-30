@@ -1,6 +1,5 @@
-import { Chip } from "@mui/material";
-import type { ChipProps } from "@mui/material";
-import type { Issue } from "./api";
+import { Chip, ChipProps } from "@mui/material";
+import { Issue } from "./api";
 
 const priorityLabels: Record<Issue["priority"], string> = { Low: "低", Medium: "中", High: "高" };
 

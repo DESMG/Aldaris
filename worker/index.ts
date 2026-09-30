@@ -5,7 +5,7 @@ import { issues } from "./issues";
 import { reconcileImages } from "./image-cleanup";
 import { HttpError } from "./input";
 import { securityHeaders } from "./security";
-import type { Env } from "./env";
+import { Env } from "./env";
 import { withRequestTimeout } from "./request-timeout";
 
 function apiError(message: string) {

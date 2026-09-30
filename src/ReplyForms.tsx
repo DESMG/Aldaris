@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, ReactNode } from "react";
 import { Alert, Box, Button, Stack, Typography } from "@mui/material";
-import { api, ApiError } from "./api";
-import type { Reply } from "./api";
+import { api, ApiError, Reply } from "./api";
 import Content from "./IssueContent";
 import Description from "./Description";
 import { useDraftGuard } from "./DraftGuard";
