@@ -1,5 +1,10 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Alert, Avatar, Box, Button, ButtonGroup, Card, CardContent, CardHeader, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, Menu, LinearProgress, MenuItem, Paper, Stack, Typography } from "@mui/material";
+import RadioButtonUnchecked from "@mui/icons-material/RadioButtonUnchecked";
+import Check from "@mui/icons-material/Check";
+import Remove from "@mui/icons-material/Remove";
+import FiberManualRecord from "@mui/icons-material/FiberManualRecord";
+import ArrowDropDown from "@mui/icons-material/ArrowDropDown";
 import { api, ApiError, assertApiSession, cachedJson, clearApiCache, getApiSessionGeneration, getCachedJson, Issue, Reply, User } from "./api";
 import Content from "./IssueContent";
 import { EditReplyForm, ReplyForm } from "./ReplyForms";
@@ -154,7 +159,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                             </Stack></Paper>}
                             {reply.kind !== "reply" ? <Stack direction="row" spacing={2} sx={{ alignItems: "center", py: 1, pl: 2 }}>
                                 <Avatar sx={{ width: 32, height: 32, fontSize: 16, bgcolor: reply.kind === "status" ? (reply.details.after === "Open" ? "var(--positive-bg)" : reply.details.stateReason === "completed" ? "var(--done-bg)" : "var(--neutral-bg)") : "var(--timeline-bg)", color: reply.kind === "status" ? "common.white" : "text.secondary" }}>
-                                    {reply.kind === "status" ? (reply.details.after === "Open" ? "○" : reply.details.stateReason === "completed" ? "✓" : "−") : "•"}
+                                    {reply.kind === "status" ? (reply.details.after === "Open" ? <RadioButtonUnchecked fontSize="inherit" /> : reply.details.stateReason === "completed" ? <Check fontSize="inherit" /> : <Remove fontSize="inherit" />) : <FiberManualRecord fontSize="inherit" />}
                                 </Avatar>
                                 <Stack spacing={0.5} sx={{ minWidth: 0 }}>
                                     <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>
@@ -250,10 +255,10 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                             {(hasContent, submitStatus, disabled) => canEdit && <>
                                 <ButtonGroup variant="outlined" disabled={disabled} sx={{ flexShrink: 0 }}>
                                     <Button type="button" sx={{ whiteSpace: "nowrap" }} onClick={() => void submitStatus(issue.status === "Open" ? "Closed" : "Open", closeReason)}
-                                        startIcon={<Box component="span" aria-hidden="true" sx={{ lineHeight: 1, color: issue.status === "Closed" ? "success.main" : closeReason === "completed" ? "secondary.main" : "text.secondary" }}>{issue.status === "Closed" ? "○" : closeReason === "completed" ? "✓" : "−"}</Box>}>
+                                        startIcon={<Box component="span" aria-hidden="true" sx={{ lineHeight: 1, color: issue.status === "Closed" ? "success.main" : closeReason === "completed" ? "secondary.main" : "text.secondary" }}>{issue.status === "Closed" ? <RadioButtonUnchecked fontSize="inherit" /> : closeReason === "completed" ? <Check fontSize="inherit" /> : <Remove fontSize="inherit" />}</Box>}>
                                         {hasContent ? "回复并" : ""}{issue.status === "Closed" ? "重新打开" : closeReason === "completed" ? "关闭工单" : "关闭为不计划处理"}
                                     </Button>
-                                    <Button type="button" sx={{ px: 1, minWidth: "36px !important", flex: "0 0 36px" }} aria-label={issue.status === "Closed" ? "更改关闭原因" : "选择关闭原因"} aria-haspopup="menu" aria-controls={closeMenu ? "close-reason-menu" : undefined} aria-expanded={Boolean(closeMenu)} onClick={event => setCloseMenu(event.currentTarget)}>▾</Button>
+                                    <Button type="button" sx={{ px: 1, minWidth: "36px !important", flex: "0 0 36px" }} aria-label={issue.status === "Closed" ? "更改关闭原因" : "选择关闭原因"} aria-haspopup="menu" aria-controls={closeMenu ? "close-reason-menu" : undefined} aria-expanded={Boolean(closeMenu)} onClick={event => setCloseMenu(event.currentTarget)}><ArrowDropDown /></Button>
                                 </ButtonGroup>
                                 <Menu id="close-reason-menu" anchorEl={closeMenu} open={Boolean(closeMenu)} onClose={() => setCloseMenu(null)}>
                                     {(["completed", "not_planned"] as const).map(reason => <MenuItem key={reason} role="menuitemradio" aria-checked={(issue.status === "Closed" ? issue.stateReason : closeReason) === reason}
@@ -263,7 +268,7 @@ export default function IssueDetail({ id, user, replyTarget }: { id: number; use
                                             if (issue.status === "Closed") void updateIssue("status", "Closed", reason);
                                             else setCloseReason(reason);
                                         }}>
-                                        <Box component="span" aria-hidden="true" sx={{ color: reason === "completed" ? "secondary.main" : "text.secondary", mr: 1.5 }}>{reason === "completed" ? "✓" : "−"}</Box>
+                                        <Box component="span" aria-hidden="true" sx={{ color: reason === "completed" ? "secondary.main" : "text.secondary", mr: 1.5 }}>{reason === "completed" ? <Check fontSize="inherit" /> : <Remove fontSize="inherit" />}</Box>
                                         <Box><Typography>{reason === "completed" ? "已完成" : "不计划处理"}</Typography><Typography variant="caption" color="text.secondary">{reason === "completed" ? "问题已解决，工作已完成" : "不再处理此问题"}</Typography></Box>
                                     </MenuItem>)}
                                 </Menu>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, IconButton, Stack, Typography } from "@mui/material";
+import Close from "@mui/icons-material/Close";
 import { IMAGE_MAX_BYTES, IMAGE_MAX_COUNT } from "../shared/limits";
 import ZoomableImage from "./ZoomableImage";
 
@@ -96,7 +97,7 @@ export default function ImageSelection({ images, onChange, disabled, retainedCou
                 <IconButton size="small" aria-label={`移除图片 ${index + 1}`} disabled={disabled || processing}
                     onClick={() => onChange(images.filter((_, i) => i !== index))}
                     sx={{ position: "absolute", top: 4, right: 4, width: 24, height: 24, bgcolor: "background.paper", border: 1, borderColor: "divider", "&:hover": { bgcolor: "background.paper" } }}>
-                    <Box component="span" aria-hidden="true" sx={{ fontSize: 18, lineHeight: 1 }}>×</Box>
+                    <Close sx={{ fontSize: 18 }} />
                 </IconButton>
             </Box>)}
         </Box>

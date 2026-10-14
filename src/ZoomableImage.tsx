@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, ReactNode } from "react";
-import { Box, Button, Modal, Stack, SvgIcon } from "@mui/material";
+import { Box, Button, Modal, Stack } from "@mui/material";
+import ZoomIn from "@mui/icons-material/ZoomIn";
+import ZoomOut from "@mui/icons-material/ZoomOut";
 import { SxProps, Theme } from "@mui/material/styles";
 
 export default function ZoomableImage({ alt, thumbnailSx, renderImage }: {
@@ -103,11 +105,7 @@ export default function ZoomableImage({ alt, thumbnailSx, renderImage }: {
                             const scale = Math.min(8, Math.max(1, current.scale * factor));
                             return { scale, x: current.x * scale / current.scale, y: current.y * scale / current.scale };
                         })} sx={{ minWidth: 36, px: 0.5 }}>
-                        <SvgIcon>
-                            <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" strokeWidth="2" />
-                            <path d="M14.5 14.5 21 21M7 10h6" fill="none" stroke="currentColor" strokeWidth="2" />
-                            {factor > 1 && <path d="M10 7v6" fill="none" stroke="currentColor" strokeWidth="2" />}
-                        </SvgIcon>
+                        {factor > 1 ? <ZoomIn /> : <ZoomOut />}
                     </Button>)}
                     <Button variant="outlined" onClick={() => setView({ scale: 1, x: 0, y: 0 })}>重置缩放</Button>
                     <Button variant="contained" onClick={() => setOpen(false)}>关闭预览</Button>
